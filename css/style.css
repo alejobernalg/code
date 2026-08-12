@@ -6,6 +6,7 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  height: 100dvh;
   background: radial-gradient(ellipse at center, #180a22 0%, #050208 75%);
   display: flex;
   flex-direction: column;
@@ -13,6 +14,7 @@ html, body {
   justify-content: center;
   font-family: 'Courier New', monospace;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #stage {
@@ -20,6 +22,7 @@ html, body {
   width: 900px;
   max-width: 100vw;
   max-height: 90vh;
+  max-height: 90dvh;
   aspect-ratio: 320 / 224;
   box-shadow:
     0 0 0 4px #0d0710,
@@ -27,6 +30,10 @@ html, body {
     0 0 50px rgba(255, 140, 40, 0.28);
   border-radius: 2px;
   overflow: hidden;
+}
+
+@media (max-width: 480px), (max-height: 480px) {
+  #stage { max-height: 96dvh; border-radius: 0; }
 }
 
 #screen {
@@ -84,4 +91,68 @@ html, body {
   text-align: center;
   text-shadow: 0 1px 0 #000;
   padding: 0 12px;
+}
+
+/* -- controles táctiles (móvil/tablet) -- */
+#touchControls {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+body.touch #hint { display: none; }
+body.touch #touchControls { display: block; }
+
+.tc-dpad,
+.tc-actions {
+  position: absolute;
+  bottom: 4%;
+  display: grid;
+  gap: clamp(6px, 1.8vmin, 12px);
+  pointer-events: auto;
+}
+
+.tc-dpad {
+  left: 3%;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tc-actions {
+  right: 3%;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.tc-btn {
+  width: clamp(38px, 11vmin, 58px);
+  height: clamp(38px, 11vmin, 58px);
+  border: 2px solid rgba(240, 230, 210, 0.45);
+  background: rgba(15, 8, 18, 0.5);
+  color: #f0e6d2;
+  font-size: clamp(14px, 4vmin, 20px);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  padding: 0;
+}
+
+.tc-square { border-radius: 8px; }
+.tc-round { border-radius: 50%; }
+.tc-attack { background: rgba(184, 48, 42, 0.35); border-color: rgba(255, 190, 150, 0.55); }
+
+.tc-btn.active {
+  background: rgba(255, 140, 40, 0.55);
+  border-color: #ffe0a0;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #hint { display: none; }
+  #touchControls { display: block; }
 }

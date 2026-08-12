@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------
 import { W, H } from "./config.js";
 import { state, resetState, updateMeta } from "./state.js";
-import { input, initInput, clearEdges } from "./input.js";
+import { input, initInput, initTouchControls, clearEdges } from "./input.js";
 import { updatePlayer, drawPlayer } from "./player.js";
 import { updateEnemies, updateSpawner, drawEnemy } from "./enemies.js";
 import { updateProjectiles, drawProjectiles } from "./projectiles.js";
@@ -18,6 +18,7 @@ const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
 initInput(canvas);
+initTouchControls(document.getElementById("touchControls"));
 
 const muteBtn = document.getElementById("muteBtn");
 muteBtn.addEventListener("click", () => {

@@ -29,25 +29,33 @@ function syncHeld() {
 
 const PREVENTABLE = new Set(["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyZ", "KeyX", "KeyC"]);
 
+function pressCode(code) {
+  const already = !!held[code];
+  held[code] = true;
+  if (!already) {
+    if (code === "ArrowUp" || code === "Space") input.jumpPressed = true;
+    if (code === "KeyX") input.xPressed = true;
+    if (code === "KeyZ") input.zPressedEdge = true;
+    if (["Space", "Enter", "KeyZ"].includes(code)) input.confirmPressed = true;
+  }
+  syncHeld();
+}
+
+function releaseCode(code) {
+  held[code] = false;
+  if (code === "KeyZ") input.zReleasedEdge = true;
+  syncHeld();
+}
+
 export function initInput(canvas) {
   window.addEventListener("keydown", (e) => {
     if (PREVENTABLE.has(e.code)) e.preventDefault();
     unlockAudio();
-    const already = !!held[e.code];
-    held[e.code] = true;
-    if (!already) {
-      if (e.code === "ArrowUp" || e.code === "Space") input.jumpPressed = true;
-      if (e.code === "KeyX") input.xPressed = true;
-      if (e.code === "KeyZ") input.zPressedEdge = true;
-      if (["Space", "Enter", "KeyZ"].includes(e.code)) input.confirmPressed = true;
-    }
-    syncHeld();
+    pressCode(e.code);
   });
 
   window.addEventListener("keyup", (e) => {
-    held[e.code] = false;
-    if (e.code === "KeyZ") input.zReleasedEdge = true;
-    syncHeld();
+    releaseCode(e.code);
   });
 
   canvas.addEventListener("mousedown", (e) => {
@@ -78,4 +86,36 @@ export function initInput(canvas) {
     input.zReleasedEdge = true;
     syncHeld();
   }, { passive: false });
+}
+
+// -- controles táctiles en pantalla (móvil/tablet) --
+export const isTouchDevice =
+  "ontouchstart" in window || navigator.maxTouchPoints > 0 || matchMedia("(pointer: coarse)").matches;
+
+export function initTouchControls(root) {
+  if (!isTouchDevice) return;
+  document.body.classList.add("touch");
+
+  const buttons = root.querySelectorAll("[data-code]");
+  buttons.forEach((btn) => {
+    const code = btn.dataset.code;
+
+    const press = (e) => {
+      e.preventDefault();
+      unlockAudio();
+      if (e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
+      btn.classList.add("active");
+      pressCode(code);
+    };
+    const release = (e) => {
+      e.preventDefault();
+      btn.classList.remove("active");
+      releaseCode(code);
+    };
+
+    btn.addEventListener("pointerdown", press);
+    btn.addEventListener("pointerup", release);
+    btn.addEventListener("pointercancel", release);
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  });
 }
