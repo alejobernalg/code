@@ -108,30 +108,44 @@ body.touch #touchControls { display: block; }
 .tc-dpad,
 .tc-actions {
   position: absolute;
-  bottom: 4%;
-  display: grid;
-  gap: clamp(6px, 1.8vmin, 12px);
+  bottom: max(4%, env(safe-area-inset-bottom, 0px) + 10px);
   pointer-events: auto;
 }
 
 .tc-dpad {
-  left: 3%;
+  left: max(3%, env(safe-area-inset-left, 0px) + 8px);
+  display: grid;
   grid-template-columns: repeat(2, 1fr);
+  gap: clamp(8px, 2vmin, 14px);
 }
 
+/* cluster en forma de diamante: pulgar cómodo sin mirar los botones */
 .tc-actions {
-  right: 3%;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+  right: max(3%, env(safe-area-inset-right, 0px) + 8px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-areas:
+    ".    jump  ."
+    "jav  .     atk"
+    ".    block .";
+  gap: clamp(2px, 1vmin, 6px);
+  width: clamp(140px, 34vmin, 210px);
+  aspect-ratio: 1;
 }
+
+.tc-jump   { grid-area: jump; }
+.tc-javelin { grid-area: jav; }
+.tc-attack { grid-area: atk; }
+.tc-block  { grid-area: block; }
 
 .tc-btn {
-  width: clamp(38px, 11vmin, 58px);
-  height: clamp(38px, 11vmin, 58px);
-  border: 2px solid rgba(240, 230, 210, 0.45);
-  background: rgba(15, 8, 18, 0.5);
+  width: clamp(44px, 12vmin, 62px);
+  height: clamp(44px, 12vmin, 62px);
+  border: 2px solid rgba(240, 230, 210, 0.5);
+  background: rgba(15, 8, 18, 0.55);
   color: #f0e6d2;
-  font-size: clamp(14px, 4vmin, 20px);
+  font-size: clamp(16px, 4.2vmin, 22px);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -139,17 +153,32 @@ body.touch #touchControls { display: block; }
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   touch-action: none;
   padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: background 0.08s ease, border-color 0.08s ease, transform 0.08s ease;
 }
 
-.tc-square { border-radius: 8px; }
+.tc-actions .tc-btn {
+  width: 100%;
+  height: 100%;
+}
+
+.tc-square { border-radius: 10px; }
 .tc-round { border-radius: 50%; }
-.tc-attack { background: rgba(184, 48, 42, 0.35); border-color: rgba(255, 190, 150, 0.55); }
+
+/* botón primario: más grande y en color de acento para ubicarlo sin mirar */
+.tc-attack {
+  background: rgba(184, 48, 42, 0.45);
+  border-color: rgba(255, 190, 150, 0.7);
+  font-size: clamp(19px, 5vmin, 26px);
+}
 
 .tc-btn.active {
-  background: rgba(255, 140, 40, 0.55);
+  background: rgba(255, 140, 40, 0.6);
   border-color: #ffe0a0;
+  transform: scale(0.92);
 }
 
 @media (hover: none) and (pointer: coarse) {

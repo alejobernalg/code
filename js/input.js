@@ -106,6 +106,7 @@ export function initTouchControls(root) {
       if (e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
       btn.classList.add("active");
       pressCode(code);
+      navigator.vibrate?.(8);
     };
     const release = (e) => {
       e.preventDefault();
