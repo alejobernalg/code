@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Estado central del juego (única fuente de verdad)
 // ---------------------------------------------------------------------
-import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, COLORS } from "./config.js";
+import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS } from "./config.js";
 import { rand as randUtil } from "./utils.js";
 import { particles, spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
@@ -18,6 +18,14 @@ function loadBestScore() {
 
 function persistBestScore(v) {
   try { localStorage.setItem(BEST_SCORE_KEY, String(v)); } catch (e) { /* almacenamiento no disponible */ }
+}
+
+function clampNivel(n) {
+  return Math.min(LEVEL_COUNT, Math.max(1, n));
+}
+
+export function moveLevelSelection(delta) {
+  state.nivelSeleccionado = clampNivel(state.nivelSeleccionado + delta);
 }
 
 function freshPlayer() {
@@ -43,7 +51,9 @@ function freshPlayer() {
 }
 
 export const state = {
-  fase: "start", // start | playing | gameover
+  fase: "start", // start | levelSelect | playing | gameover
+  nivel: 1,
+  nivelSeleccionado: 1,
   puntos: 0,
   mejorPuntaje: loadBestScore(),
   vidas: PLAYER_LIVES,
@@ -68,8 +78,10 @@ export const state = {
   proximoInmortal: 42
 };
 
-export function resetState() {
+export function resetState(nivel = state.nivelSeleccionado) {
   state.fase = "playing";
+  state.nivel = clampNivel(nivel);
+  state.nivelSeleccionado = state.nivel;
   state.puntos = 0;
   state.vidas = PLAYER_LIVES;
   state.comboActual = 0;

@@ -109,5 +109,6 @@ export const sfx = {
     tone(220, 0.25, "sawtooth", { vol: 0.26, delay: 0.2 });
     tone(140, 0.4, "sawtooth", { vol: 0.24, delay: 0.42 });
   },
-  start() { tone(300, 0.1, "square", { vol: 0.25 }); tone(500, 0.14, "square", { vol: 0.25, delay: 0.1 }); }
+  start() { tone(300, 0.1, "square", { vol: 0.25 }); tone(500, 0.14, "square", { vol: 0.25, delay: 0.1 }); },
+  menuMove() { tone(420, 0.05, "square", { vol: 0.16 }); }
 };

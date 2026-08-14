@@ -2,7 +2,7 @@
 // Punto de entrada: arma el canvas, conecta módulos y corre el bucle
 // ---------------------------------------------------------------------
 import { W, H } from "./config.js";
-import { state, resetState, updateMeta } from "./state.js";
+import { state, resetState, updateMeta, moveLevelSelection } from "./state.js";
 import { input, initInput, initTouchControls, clearEdges } from "./input.js";
 import { updatePlayer, drawPlayer } from "./player.js";
 import { updateEnemies, updateSpawner, drawEnemy } from "./enemies.js";
@@ -10,7 +10,7 @@ import { updateProjectiles, drawProjectiles } from "./projectiles.js";
 import { updateArrowRain, drawArrowRainOverlay, drawFallingArrows } from "./arrowRain.js";
 import { drawBackground, drawVignette } from "./background.js";
 import { updateParticles, drawParticles } from "./particles.js";
-import { drawHUD, drawStartScreen, drawGameOverScreen } from "./hud.js";
+import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen } from "./hud.js";
 import { toggleMute, sfx } from "./audio.js";
 
 const canvas = document.getElementById("screen");
@@ -31,9 +31,20 @@ let animTime = 0;
 function update(dt) {
   animTime += dt;
 
-  if (state.fase !== "playing" && input.confirmPressed) {
-    resetState();
-    sfx.start();
+  if (state.fase === "start") {
+    if (input.confirmPressed) {
+      state.fase = "levelSelect";
+      sfx.start();
+    }
+  } else if (state.fase === "levelSelect") {
+    if (input.leftPressedEdge) { moveLevelSelection(-1); sfx.menuMove(); }
+    if (input.rightPressedEdge) { moveLevelSelection(1); sfx.menuMove(); }
+    if (input.confirmPressed) {
+      resetState(state.nivelSeleccionado);
+      sfx.start();
+    }
+  } else if (state.fase === "gameover") {
+    if (input.confirmPressed) state.fase = "levelSelect";
   }
 
   updateMeta(dt);
@@ -57,7 +68,7 @@ function render(dt) {
 
   drawBackground(ctx, animTime, dt);
 
-  if (state.fase !== "start") {
+  if (state.fase === "playing" || state.fase === "gameover") {
     const drawables = [{ y: state.jugador.y, draw: () => drawPlayer(ctx) }];
     for (const en of state.enemigos) drawables.push({ y: en.y, draw: () => drawEnemy(ctx, en) });
     drawables.sort((a, b) => a.y - b.y);
@@ -74,6 +85,7 @@ function render(dt) {
 
   if (state.fase === "playing") drawHUD(ctx);
   else if (state.fase === "start") drawStartScreen(ctx, animTime);
+  else if (state.fase === "levelSelect") drawLevelSelectScreen(ctx, animTime);
   else if (state.fase === "gameover") drawGameOverScreen(ctx);
 }
 

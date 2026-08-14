@@ -9,7 +9,8 @@ export const input = {
   left: false, right: false, cDown: false, zDown: false,
   jumpPressed: false, xPressed: false,
   zPressedEdge: false, zReleasedEdge: false,
-  confirmPressed: false
+  confirmPressed: false,
+  leftPressedEdge: false, rightPressedEdge: false
 };
 
 export function clearEdges() {
@@ -18,6 +19,8 @@ export function clearEdges() {
   input.zPressedEdge = false;
   input.zReleasedEdge = false;
   input.confirmPressed = false;
+  input.leftPressedEdge = false;
+  input.rightPressedEdge = false;
 }
 
 function syncHeld() {
@@ -36,6 +39,8 @@ function pressCode(code) {
     if (code === "ArrowUp" || code === "Space") input.jumpPressed = true;
     if (code === "KeyX") input.xPressed = true;
     if (code === "KeyZ") input.zPressedEdge = true;
+    if (code === "ArrowLeft") input.leftPressedEdge = true;
+    if (code === "ArrowRight") input.rightPressedEdge = true;
     if (["Space", "Enter", "KeyZ"].includes(code)) input.confirmPressed = true;
   }
   syncHeld();

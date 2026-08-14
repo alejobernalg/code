@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Interfaz: HUD de partida, pantalla de inicio y pantalla de Game Over
 // ---------------------------------------------------------------------
-import { W, H, COLORS, JAVELIN_MAX } from "./config.js";
+import { W, H, COLORS, JAVELIN_MAX, LEVEL_COUNT } from "./config.js";
 import { pixelText, px, roundRect, glow } from "./utils.js";
 import { state } from "./state.js";
 
@@ -39,6 +39,10 @@ export function drawHUD(ctx) {
   panel(ctx, 2, 2, 82, 20);
   shadowText(ctx, `PUNTOS ${state.puntos}`, 6, 4, "#ffe9c4", 7, "left");
   shadowText(ctx, `MEJOR ${state.mejorPuntaje}`, 6, 13, "#c9b98a", 6, "left");
+
+  const levelW = 34;
+  panel(ctx, W / 2 - levelW / 2, 2, levelW, 10, 0.5);
+  shadowText(ctx, `NIVEL ${state.nivel}`, W / 2, 4, "#f0e0c4", 6, "center");
 
   const livesW = state.vidas > 0 ? state.vidas * 12 + 8 : 0;
   if (livesW > 0) panel(ctx, W - livesW - 4, 2, livesW, 12);
@@ -175,6 +179,55 @@ export function drawStartScreen(ctx, time) {
   shadowText(ctx, `Mejor puntaje: ${state.mejorPuntaje}`, W / 2, H - 14, "#a898b0", 7, "center");
 }
 
+export function drawLevelSelectScreen(ctx, time) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "rgba(10, 4, 16, 0.55)");
+  g.addColorStop(0.5, "rgba(10, 4, 16, 0.7)");
+  g.addColorStop(1, "rgba(4, 2, 8, 0.9)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  shadowText(ctx, "ELIGE TU NIVEL", W / 2, 20, "#ff7a4a", 12, "center");
+
+  const cols = 5, rows = 2;
+  const tileW = 42, tileH = 36, gapX = 8, gapY = 10;
+  const gridW = cols * tileW + (cols - 1) * gapX;
+  const gridH = rows * tileH + (rows - 1) * gapY;
+  const startX = W / 2 - gridW / 2;
+  const startY = 42;
+
+  for (let i = 0; i < LEVEL_COUNT; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const x = startX + col * (tileW + gapX);
+    const y = startY + row * (tileH + gapY);
+    const level = i + 1;
+    const selected = level === state.nivelSeleccionado;
+
+    if (selected) {
+      const pulse = 0.5 + Math.abs(Math.sin(time * 6)) * 0.4;
+      glow(ctx, x + tileW / 2, y + tileH / 2, 30, "rgba(255,180,90,0.5)", pulse);
+    }
+
+    const grad = ctx.createLinearGradient(0, y, 0, y + tileH);
+    if (selected) {
+      grad.addColorStop(0, COLORS.bronzeHi);
+      grad.addColorStop(1, COLORS.bronze);
+    } else {
+      grad.addColorStop(0, "rgba(60,40,60,0.55)");
+      grad.addColorStop(1, "rgba(30,18,30,0.55)");
+    }
+    roundRect(ctx, x, y, tileW, tileH, 4, grad, selected ? COLORS.shieldRim : "rgba(255,180,110,0.25)");
+
+    shadowText(ctx, String(level), x + tileW / 2, y + tileH / 2 - 6, selected ? COLORS.outline : "#e8d9c4", 10, "center");
+  }
+
+  const hintY = startY + gridH + 14;
+  if (Math.floor(time * 2) % 2 === 0) {
+    shadowText(ctx, "←→ ELEGIR NIVEL", W / 2, hintY, "#ffe9c4", 7, "center");
+  }
+  shadowText(ctx, "ENTER O CLIC PARA JUGAR", W / 2, hintY + 12, "#c9b98a", 7, "center");
+}
+
 export function drawGameOverScreen(ctx) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, "rgba(10, 4, 16, 0.6)");
@@ -190,5 +243,5 @@ export function drawGameOverScreen(ctx) {
   shadowText(ctx, `Mejor puntaje: ${state.mejorPuntaje}`, W / 2, H / 2 - 1, "#c9b98a", 8, "center");
 
   shadowText(ctx, "Molṑn labe.", W / 2, H / 2 + 20, "#8a7a9a", 7, "center");
-  shadowText(ctx, "Clic o [ENTER] para reintentar", W / 2, H / 2 + 38, "#d9b98a", 7, "center");
+  shadowText(ctx, "Clic o [ENTER] para elegir nivel", W / 2, H / 2 + 38, "#d9b98a", 7, "center");
 }
