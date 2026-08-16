@@ -10,7 +10,7 @@ import { updateProjectiles, drawProjectiles } from "./projectiles.js";
 import { updateArrowRain, drawArrowRainOverlay, drawFallingArrows } from "./arrowRain.js";
 import { drawBackground, drawVignette } from "./background.js";
 import { updateParticles, drawParticles } from "./particles.js";
-import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen } from "./hud.js";
+import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen, drawLevelCompleteScreen } from "./hud.js";
 import { toggleMute, sfx } from "./audio.js";
 
 const canvas = document.getElementById("screen");
@@ -45,6 +45,12 @@ function update(dt) {
     }
   } else if (state.fase === "gameover") {
     if (input.confirmPressed) state.fase = "levelSelect";
+  } else if (state.fase === "levelComplete") {
+    if (input.confirmPressed) {
+      if (state.nivel < 10) resetState(state.nivel + 1);
+      else state.fase = "levelSelect";
+      sfx.start();
+    }
   }
 
   updateMeta(dt);
@@ -68,7 +74,7 @@ function render(dt) {
 
   drawBackground(ctx, animTime, dt);
 
-  if (state.fase === "playing" || state.fase === "gameover") {
+  if (state.fase === "playing" || state.fase === "gameover" || state.fase === "levelComplete") {
     const drawables = [{ y: state.jugador.y, draw: () => drawPlayer(ctx) }];
     for (const en of state.enemigos) drawables.push({ y: en.y, draw: () => drawEnemy(ctx, en) });
     drawables.sort((a, b) => a.y - b.y);
@@ -87,6 +93,7 @@ function render(dt) {
   else if (state.fase === "start") drawStartScreen(ctx, animTime);
   else if (state.fase === "levelSelect") drawLevelSelectScreen(ctx, animTime);
   else if (state.fase === "gameover") drawGameOverScreen(ctx);
+  else if (state.fase === "levelComplete") drawLevelCompleteScreen(ctx);
 }
 
 let last = 0;

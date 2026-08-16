@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------
 // Escenario: cielo de atardecer, montañas, mar, acantilados y plataformas
 // ---------------------------------------------------------------------
-import { W, H, PLATFORMS, COLORS } from "./config.js";
+import { W, H, activePlatforms, COLORS } from "./config.js";
 import { px, glow } from "./utils.js";
+import { state } from "./state.js";
 
 const clouds = [
   { x: 40, y: 26, w: 34, h: 6, speed: 1.2 },
@@ -207,7 +208,51 @@ function drawEmbers(ctx, time, dt) {
   ctx.globalAlpha = 1;
 }
 
+function drawCave(ctx, time) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#050d19");
+  g.addColorStop(0.5, "#0a2631");
+  g.addColorStop(1, "#06141c");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  glow(ctx, 72, 84, 70, "rgba(48, 204, 183, 0.24)", 1);
+  glow(ctx, 250, 130, 58, "rgba(38, 150, 190, 0.18)", 1);
+  ctx.fillStyle = "#071018";
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(40, 0); ctx.lineTo(52, 34); ctx.lineTo(84, 12); ctx.lineTo(120, 48);
+  ctx.lineTo(160, 20); ctx.lineTo(198, 46); ctx.lineTo(236, 8); ctx.lineTo(276, 38); ctx.lineTo(W, 18);
+  ctx.lineTo(W, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#0c3840";
+  for (let x = 18; x < W; x += 34) {
+    const h = 18 + ((x * 13) % 28);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 12, h); ctx.lineTo(x + 22, 0); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(96, 225, 200, 0.48)";
+  for (let i = 0; i < 18; i++) {
+    const x = (i * 47 + 19) % W, y = 40 + ((i * 31) % 128);
+    if (Math.sin(time * 1.8 + i) > 0.15) px(ctx, x, y, 1, 1, "#76e6d0");
+  }
+  ctx.fillStyle = "#041017";
+  ctx.beginPath(); ctx.moveTo(0, 220); ctx.lineTo(25, 184); ctx.lineTo(58, 205); ctx.lineTo(95, 188); ctx.lineTo(136, 210); ctx.lineTo(176, 190); ctx.lineTo(220, 207); ctx.lineTo(266, 181); ctx.lineTo(W, 204); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+}
+
+function drawCavePlatform(ctx, plat) {
+  if (plat.destroyed) return;
+  const g = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.h);
+  g.addColorStop(0, "#58c4bb"); g.addColorStop(0.15, "#1d7377"); g.addColorStop(1, "#092c38");
+  ctx.fillStyle = g; ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  px(ctx, plat.x, plat.y, plat.w, 1, "#9df4df");
+  ctx.strokeStyle = "#06202b"; ctx.lineWidth = 1;
+  for (let x = plat.x + 10; x < plat.x + plat.w; x += 13) { ctx.beginPath(); ctx.moveTo(x, plat.y); ctx.lineTo(x - 4, plat.y + plat.h); ctx.stroke(); }
+  if (plat.destructible) px(ctx, plat.x + plat.w / 2 - 2, plat.y + 2, 4, 1, "#d4fff0");
+}
+
 export function drawBackground(ctx, time, dt = 0) {
+  if (state.nivel === 3) {
+    drawCave(ctx, time);
+    for (const plat of activePlatforms) drawCavePlatform(ctx, plat);
+    return;
+  }
   const horizon = 178;
   drawSky(ctx, horizon);
   drawClouds(ctx, time);
@@ -215,7 +260,7 @@ export function drawBackground(ctx, time, dt = 0) {
   drawSea(ctx, time, 168);
   drawCliff(ctx, true);
   drawCliff(ctx, false);
-  for (const plat of PLATFORMS) drawBrickPlatform(ctx, plat);
+  for (const plat of activePlatforms) if (!plat.destroyed) drawBrickPlatform(ctx, plat);
   drawEmbers(ctx, time, dt);
 }
 

@@ -24,6 +24,32 @@ export const PLATFORMS = [
 ];
 export const GROUND_Y = 200;
 
+// Cada nivel puede cambiar su distribución sin duplicar la física. El nivel 3
+// es una cueva: el suelo permanece seguro, pero los salientes se derrumban.
+const CAVE_PLATFORMS = [
+  { x: 0, y: 200, w: 320, h: 24, tier: 0 },
+  { x: 10, y: 164, w: 74, h: 8, tier: 1, destructible: true, hp: 2 },
+  { x: 124, y: 142, w: 72, h: 8, tier: 2, destructible: true, hp: 2 },
+  { x: 238, y: 164, w: 72, h: 8, tier: 1, destructible: true, hp: 2 },
+  { x: 42, y: 104, w: 64, h: 8, tier: 3, destructible: true, hp: 1 },
+  { x: 214, y: 96, w: 66, h: 8, tier: 3, destructible: true, hp: 1 }
+];
+
+export const LEVELS = Array.from({ length: LEVEL_COUNT }, (_, i) => ({
+  objective: 8 + i * 3,
+  platforms: PLATFORMS,
+  theme: "termopilas"
+}));
+LEVELS[2] = { objective: 20, platforms: CAVE_PLATFORMS, theme: "cueva" };
+
+export let activePlatforms = PLATFORMS;
+export function setActiveLevel(level) {
+  const definition = LEVELS[level - 1] || LEVELS[0];
+  // Se clonan para que los derrumbes no alteren futuros intentos.
+  activePlatforms = definition.platforms.map(p => ({ ...p, hp: p.hp || 0, destroyed: false }));
+  return definition;
+}
+
 // -- jugador --
 export const PLAYER_HW = 6;
 export const PLAYER_H = 22;
@@ -141,7 +167,9 @@ export const ENEMY_DEFS = {
   escudo:   { vida: 2, velocidad: 26, dmg: 1, hw: 7, h: 21, score: SCORES.escudo },
   arquero:  { vida: 1, velocidad: 24, dmg: 1, hw: 6, h: 20, score: SCORES.arquero, arrowSpeed: 130, keepDist: 95, fleeDist: 45 },
   veloz:    { vida: 1, velocidad: 62, dmg: 1, hw: 5, h: 19, score: SCORES.veloz },
-  inmortal: { vida: 5, velocidad: 20, dmg: 1, hw: 9, h: 26, score: SCORES.inmortal, knockback: 140 }
+  inmortal: { vida: 5, velocidad: 20, dmg: 1, hw: 9, h: 26, score: SCORES.inmortal, knockback: 140 },
+  explosivo: { vida: 1, velocidad: 92, dmg: 1, hw: 5, h: 19, score: 90, blastRadius: 31, fuse: 0.48 },
+  incendiario: { vida: 2, velocidad: 28, dmg: 1, hw: 6, h: 20, score: 110, fireSpeed: 105, keepDist: 88, fleeDist: 38 }
 };
 
 export function clamp(v, min, max) {

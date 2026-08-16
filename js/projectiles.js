@@ -1,12 +1,27 @@
 // ---------------------------------------------------------------------
 // Proyectiles: jabalinas del jugador y flechas de los arqueros persas
 // ---------------------------------------------------------------------
-import { W, COLORS } from "./config.js";
+import { W, COLORS, GRAVITY, activePlatforms } from "./config.js";
 import { aabb, glow } from "./utils.js";
 import { spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
 import { state, damagePlayer } from "./state.js";
 import { damageEnemy } from "./enemies.js";
+
+function explodeBomb(p) {
+  const player = state.jugador;
+  spawnParticles(p.x, p.y, "#ffb13b", 18);
+  spawnParticles(p.x, p.y, "#e85328", 10);
+  state.screenShake = Math.max(state.screenShake, 0.7);
+  if (Math.hypot(player.x - p.x, (player.y - 10) - p.y) < 28) {
+    damagePlayer(p.dmg, Math.sign(player.x - p.x) || 1, { blockable: true });
+  }
+  for (const plat of activePlatforms) {
+    if (!plat.destructible || plat.destroyed) continue;
+    const nearX = Math.max(plat.x, Math.min(p.x, plat.x + plat.w));
+    if (Math.hypot(p.x - nearX, p.y - plat.y) < 26 && --plat.hp <= 0) plat.destroyed = true;
+  }
+}
 
 /** Colisión por barrido: a alta velocidad la jabalina puede avanzar más que
  *  el ancho de un enemigo en un solo frame, así que se compara el segmento
@@ -42,6 +57,17 @@ export function updateProjectiles(dt) {
         sfx.arrowImpact();
         damagePlayer(p.dmg, Math.sign(p.vx) || 1, { blockable: true });
         spawnParticles(p.x, p.y, COLORS.arrow, 4);
+        consumed = true;
+      }
+    } else if (p.tipo === "bomba") {
+      p.vy += GRAVITY * dt * 0.55;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      const playerBox = aabb(state.jugador);
+      const hitPlayer = p.x > playerBox.left - 3 && p.x < playerBox.right + 3 && p.y > playerBox.top - 3 && p.y < playerBox.bottom + 3;
+      const hitPlatform = activePlatforms.some(plat => !plat.destroyed && p.x > plat.x && p.x < plat.x + plat.w && p.y >= plat.y - 2 && p.y <= plat.y + plat.h);
+      if (hitPlayer || hitPlatform || p.life <= 0) {
+        explodeBomb(p);
         consumed = true;
       }
     }
@@ -97,9 +123,18 @@ function drawFlecha(ctx, p) {
   ctx.stroke();
 }
 
+function drawBomb(ctx, p) {
+  glow(ctx, p.x, p.y, 10, "rgba(255,100,25,0.7)", 0.8);
+  ctx.fillStyle = "#401d1d";
+  ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#ffb13b";
+  ctx.beginPath(); ctx.arc(p.x - 1, p.y - 1, 1.5, 0, Math.PI * 2); ctx.fill();
+}
+
 export function drawProjectiles(ctx) {
   for (const p of state.proyectiles) {
     if (p.tipo === "jabalina") drawJavelin(ctx, p);
+    else if (p.tipo === "bomba") drawBomb(ctx, p);
     else drawFlecha(ctx, p);
   }
 }

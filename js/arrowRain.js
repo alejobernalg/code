@@ -2,7 +2,7 @@
 // Evento especial: lluvia de flechas — máquina de estados
 // normal -> aviso -> activa -> normal
 // ---------------------------------------------------------------------
-import { W, H, PLATFORMS, COLORS, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, RAIN_WARNING_TIME, RAIN_DURATION, RAIN_ARROW_RATE, RAIN_BONUS_SCORE } from "./config.js";
+import { W, H, activePlatforms, COLORS, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, RAIN_WARNING_TIME, RAIN_DURATION, RAIN_ARROW_RATE, RAIN_BONUS_SCORE } from "./config.js";
 import { aabb, rand } from "./utils.js";
 import { spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
@@ -43,7 +43,8 @@ function updateFallingArrows(dt) {
     }
 
     if (!remove) {
-      for (const plat of PLATFORMS) {
+      for (const plat of activePlatforms) {
+        if (plat.destroyed) continue;
         if (a.x > plat.x && a.x < plat.x + plat.w && a.y >= plat.y - 2 && a.y <= plat.y + 5) {
           spawnParticles(a.x, plat.y, COLORS.arrow, 3);
           remove = true;

@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Utilidades: dibujo pixel-art, matemáticas y física de plataformas
 // ---------------------------------------------------------------------
-import { W, H, GRAVITY, PLATFORMS, clamp } from "./config.js";
+import { W, H, GRAVITY, activePlatforms, clamp } from "./config.js";
 
 export { clamp };
 
@@ -112,7 +112,8 @@ export function applyPhysics(entity, dt, { gravity = true } = {}) {
   entity.y += entity.vy * dt;
   entity.onGround = false;
 
-  for (const plat of PLATFORMS) {
+  for (const plat of activePlatforms) {
+    if (plat.destroyed) continue;
     const withinX = entity.x + entity.hw > plat.x && entity.x - entity.hw < plat.x + plat.w;
     if (!withinX) continue;
     const platTop = plat.y;
@@ -132,7 +133,8 @@ export function applyPhysics(entity, dt, { gravity = true } = {}) {
 
 /** Encuentra la plataforma que soporta la posición dada (o null si está en el aire). */
 export function platformUnder(x, y) {
-  for (const plat of PLATFORMS) {
+  for (const plat of activePlatforms) {
+    if (plat.destroyed) continue;
     if (x > plat.x && x < plat.x + plat.w && Math.abs(y - plat.y) < 1.5) return plat;
   }
   return null;

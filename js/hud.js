@@ -43,6 +43,7 @@ export function drawHUD(ctx) {
   const levelW = 34;
   panel(ctx, W / 2 - levelW / 2, 2, levelW, 10, 0.5);
   shadowText(ctx, `NIVEL ${state.nivel}`, W / 2, 4, "#f0e0c4", 6, "center");
+  shadowText(ctx, `${state.enemigosDerrotados}/${state.objetivoEnemigos}`, W / 2, 13, "#8ce8d6", 6, "center");
 
   const livesW = state.vidas > 0 ? state.vidas * 12 + 8 : 0;
   if (livesW > 0) panel(ctx, W - livesW - 4, 2, livesW, 12);
@@ -201,15 +202,16 @@ export function drawLevelSelectScreen(ctx, time) {
     const x = startX + col * (tileW + gapX);
     const y = startY + row * (tileH + gapY);
     const level = i + 1;
+    const unlocked = level <= state.nivelDesbloqueado;
     const selected = level === state.nivelSeleccionado;
 
-    if (selected) {
+    if (selected && unlocked) {
       const pulse = 0.5 + Math.abs(Math.sin(time * 6)) * 0.4;
       glow(ctx, x + tileW / 2, y + tileH / 2, 30, "rgba(255,180,90,0.5)", pulse);
     }
 
     const grad = ctx.createLinearGradient(0, y, 0, y + tileH);
-    if (selected) {
+    if (selected && unlocked) {
       grad.addColorStop(0, COLORS.bronzeHi);
       grad.addColorStop(1, COLORS.bronze);
     } else {
@@ -218,7 +220,7 @@ export function drawLevelSelectScreen(ctx, time) {
     }
     roundRect(ctx, x, y, tileW, tileH, 4, grad, selected ? COLORS.shieldRim : "rgba(255,180,110,0.25)");
 
-    shadowText(ctx, String(level), x + tileW / 2, y + tileH / 2 - 6, selected ? COLORS.outline : "#e8d9c4", 10, "center");
+    shadowText(ctx, unlocked ? String(level) : "🔒", x + tileW / 2, y + tileH / 2 - 6, selected ? COLORS.outline : "#e8d9c4", unlocked ? 10 : 8, "center");
   }
 
   const hintY = startY + gridH + 14;
@@ -226,6 +228,17 @@ export function drawLevelSelectScreen(ctx, time) {
     shadowText(ctx, "←→ ELEGIR NIVEL", W / 2, hintY, "#ffe9c4", 7, "center");
   }
   shadowText(ctx, "ENTER O CLIC PARA JUGAR", W / 2, hintY + 12, "#c9b98a", 7, "center");
+}
+
+export function drawLevelCompleteScreen(ctx) {
+  const final = state.nivel >= LEVEL_COUNT;
+  ctx.fillStyle = "rgba(3, 14, 18, 0.66)";
+  ctx.fillRect(0, 0, W, H);
+  glow(ctx, W / 2, H / 2 - 24, 80, "rgba(71, 224, 187, 0.32)", 1);
+  panel(ctx, W / 2 - 86, H / 2 - 30, 172, 64, 0.7);
+  shadowText(ctx, final ? "¡CAMPAÑA COMPLETADA!" : `NIVEL ${state.nivel} SUPERADO`, W / 2, H / 2 - 22, "#8cf0d8", 11, "center");
+  shadowText(ctx, final ? "Has mantenido el paso" : `NIVEL ${state.nivel + 1} DESBLOQUEADO`, W / 2, H / 2 - 4, "#ffe0a0", 8, "center");
+  shadowText(ctx, final ? "ENTER PARA ELEGIR NIVEL" : "ENTER PARA CONTINUAR", W / 2, H / 2 + 18, "#f0e6d2", 7, "center");
 }
 
 export function drawGameOverScreen(ctx) {
