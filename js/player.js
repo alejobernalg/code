@@ -178,6 +178,9 @@ export function drawPlayer(ctx) {
 
   const facingRight = p.direccion === 1;
   const walking = p.estado === "walk";
+  // La entrada es la fuente inmediata de verdad: así la postura defensiva
+  // aparece desde el primer fotograma, sin esperar el cambio de estado.
+  const blocking = p.cubriendose;
   const phase = walking ? p.walkFrame : Math.sin(state.tiempoPartida * 3) * 0.4;
   const dead = p.estado === "dead";
 
@@ -195,9 +198,11 @@ export function drawPlayer(ctx) {
     if (p.estado === "jump") {
       pxG(ctx, -3, -10, 3, 6, COLORS.skinHi, COLORS.skinShade, COLORS.outline);
       pxG(ctx, 1, -12, 3, 8, COLORS.skinHi, COLORS.skin, COLORS.outline);
-    } else if (p.estado === "block") {
-      pxG(ctx, -2, -7, 3, 7, COLORS.skinHi, COLORS.skinShade, COLORS.outline);
-      pxG(ctx, 1, -7, 3, 7, COLORS.skinHi, COLORS.skin, COLORS.outline);
+    } else if (blocking) {
+      // Base amplia y baja: es una postura firme de escudo, no la pose de
+      // retroceso que usa el estado "hurt".
+      pxG(ctx, -4, -7, 3, 7, COLORS.skinHi, COLORS.skinShade, COLORS.outline);
+      pxG(ctx, 2, -7, 3, 7, COLORS.skinHi, COLORS.skin, COLORS.outline);
     } else {
       const swing = walking ? Math.sin(phase) * 3 : 0;
       pxG(ctx, -2 - swing * 0.3, -8, 3, 8, COLORS.skinHi, COLORS.skin, COLORS.outline);
@@ -213,7 +218,7 @@ export function drawPlayer(ctx) {
     ctx.fillStyle = capeGrad;
     ctx.beginPath();
     ctx.moveTo(-4, -18);
-    ctx.lineTo(-9 - Math.sin(state.tiempoPartida * 5) * 2, -12);
+    ctx.lineTo(-9 - (blocking ? 0 : Math.sin(state.tiempoPartida * 5) * 2), -12);
     ctx.lineTo(-8, -4);
     ctx.lineTo(-4, -6);
     ctx.closePath();
@@ -241,10 +246,15 @@ export function drawPlayer(ctx) {
     ctx.stroke();
 
     // escudo — bronce pulido con brillo especular, más grande y al frente al cubrirse
-    const shieldX = p.estado === "block" ? 4 : 7;
-    const shieldR = p.estado === "block" ? 9 : 6.5;
+    // Escudo adelantado y mayor al defender: tapa el torso y la cara, dando
+    // una silueta de guardia inequívoca.
+    const shieldX = blocking ? 9 : 7;
+    const shieldR = blocking ? 10 : 6.5;
     drawShield(ctx, shieldX, -16, shieldR);
-    if (p.estado === "block") spawnBlockGleam(ctx, shieldX, -16);
+    if (blocking) {
+      spawnBlockGleam(ctx, shieldX, -16);
+      pxG(ctx, 1, -17, 4, 3, COLORS.skinHi, COLORS.skinShade, COLORS.outline);
+    }
 
     // arma según el estado — el sprite es más corto que el alcance real del
     // golpe (MELEE_RANGE/CHARGE_RADIUS en config.js) a propósito: se ve más
@@ -270,7 +280,7 @@ export function drawPlayer(ctx) {
       ctx.restore();
     } else if (p.estado === "ranged") {
       drawSpear(ctx, shieldX - 2, -18, 10, false, false);
-    } else if (p.estado !== "block") {
+    } else if (!blocking) {
       drawSpear(ctx, shieldX - 2, -18, 18, false, false);
     }
 

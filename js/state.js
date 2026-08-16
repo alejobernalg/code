@@ -1,12 +1,13 @@
 // ---------------------------------------------------------------------
 // Estado central del juego (única fuente de verdad)
 // ---------------------------------------------------------------------
-import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS } from "./config.js";
+import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS, LEVELS, setActiveLevel } from "./config.js";
 import { rand as randUtil } from "./utils.js";
 import { particles, spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
 
 const BEST_SCORE_KEY = "ultimo_espartano_best_score";
+const UNLOCKED_LEVEL_KEY = "ultimo_espartano_unlocked_level";
 
 function loadBestScore() {
   try {
@@ -20,12 +21,21 @@ function persistBestScore(v) {
   try { localStorage.setItem(BEST_SCORE_KEY, String(v)); } catch (e) { /* almacenamiento no disponible */ }
 }
 
+function loadUnlockedLevel() {
+  try { return Math.min(LEVEL_COUNT, Math.max(1, Number(localStorage.getItem(UNLOCKED_LEVEL_KEY)) || 1)); }
+  catch (e) { return 1; }
+}
+
+function persistUnlockedLevel(v) {
+  try { localStorage.setItem(UNLOCKED_LEVEL_KEY, String(v)); } catch (e) { /* almacenamiento no disponible */ }
+}
+
 function clampNivel(n) {
   return Math.min(LEVEL_COUNT, Math.max(1, n));
 }
 
 export function moveLevelSelection(delta) {
-  state.nivelSeleccionado = clampNivel(state.nivelSeleccionado + delta);
+  state.nivelSeleccionado = Math.min(state.nivelDesbloqueado, clampNivel(state.nivelSeleccionado + delta));
 }
 
 function freshPlayer() {
@@ -54,6 +64,9 @@ export const state = {
   fase: "start", // start | levelSelect | playing | gameover
   nivel: 1,
   nivelSeleccionado: 1,
+  nivelDesbloqueado: loadUnlockedLevel(),
+  enemigosDerrotados: 0,
+  objetivoEnemigos: LEVELS[0].objective,
   puntos: 0,
   mejorPuntaje: loadBestScore(),
   vidas: PLAYER_LIVES,
@@ -82,6 +95,9 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.fase = "playing";
   state.nivel = clampNivel(nivel);
   state.nivelSeleccionado = state.nivel;
+  state.objetivoEnemigos = (LEVELS[state.nivel - 1] || LEVELS[0]).objective;
+  state.enemigosDerrotados = 0;
+  setActiveLevel(state.nivel);
   state.puntos = 0;
   state.vidas = PLAYER_LIVES;
   state.comboActual = 0;
@@ -96,6 +112,21 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.spawnTimer = 1.2;
   state.proximoInmortal = 42;
   particles.length = 0;
+}
+
+export function registerEnemyDefeat() {
+  state.enemigosDerrotados++;
+  if (state.enemigosDerrotados >= state.objetivoEnemigos) completeLevel();
+}
+
+export function completeLevel() {
+  if (state.fase !== "playing") return;
+  state.fase = "levelComplete";
+  const next = Math.min(LEVEL_COUNT, state.nivel + 1);
+  if (next > state.nivelDesbloqueado) {
+    state.nivelDesbloqueado = next;
+    persistUnlockedLevel(next);
+  }
 }
 
 export function awardScore(basePoints) {

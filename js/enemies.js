@@ -1,20 +1,23 @@
 // ---------------------------------------------------------------------
 // Enemigos: definiciones, IA, spawner, resolución de daño y sprites
 // ---------------------------------------------------------------------
-import { W, PLATFORMS, GROUND_Y, ENEMY_DEFS, COLORS, JUMP_VELOCITY } from "./config.js";
+import { W, activePlatforms, GROUND_Y, ENEMY_DEFS, COLORS, JUMP_VELOCITY } from "./config.js";
 import { applyPhysics, aabb, aabbOverlap, rand, px, pxG, circO, glow } from "./utils.js";
 import { spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
-import { state, awardScore, damagePlayer } from "./state.js";
-
-const MID_LEFT = PLATFORMS[1];
-const MID_RIGHT = PLATFORMS[2];
+import { state, awardScore, damagePlayer, registerEnemyDefeat } from "./state.js";
 let nextId = 1;
 
 // -----------------------------------------------------------------------
 // SPAWNER
 // -----------------------------------------------------------------------
 function poolForTime(t) {
+  if (state.nivel === 3) {
+    const pool = ["explosivo", "explosivo"];
+    if (t > 5) pool.push("incendiario");
+    if (t > 22) pool.push("explosivo", "incendiario");
+    return pool;
+  }
   const pool = ["normal"];
   if (t > 12) pool.push("normal", "arquero");
   if (t > 20) pool.push("escudo");
@@ -26,8 +29,9 @@ function pickSpawnPoint(side) {
   const fromLeft = side === "left";
   const onPlatform = Math.random() < 0.3;
   if (onPlatform) {
-    const plat = fromLeft ? MID_LEFT : MID_RIGHT;
-    return { x: fromLeft ? plat.x + 6 : plat.x + plat.w - 6, y: plat.y };
+    const candidates = activePlatforms.filter(p => p.tier > 0 && !p.destroyed);
+    const plat = candidates[fromLeft ? 0 : candidates.length - 1];
+    if (plat) return { x: fromLeft ? plat.x + 6 : plat.x + plat.w - 6, y: plat.y };
   }
   return { x: fromLeft ? -10 : W + 10, y: GROUND_Y };
 }
@@ -107,6 +111,7 @@ export function damageEnemy(en, dmg, { bypassShield = false, attackerX = null } 
     spawnParticles(en.x, en.y - en.h * 0.6, COLORS.white, 12);
     const idx = state.enemigos.indexOf(en);
     if (idx >= 0) state.enemigos.splice(idx, 1);
+    registerEnemyDefeat();
   }
   return true;
 }
@@ -183,6 +188,49 @@ function updateVeloz(en, def, dx) {
   }
 }
 
+function destroyPlatforms(x, y, radius) {
+  for (const plat of activePlatforms) {
+    if (!plat.destructible || plat.destroyed) continue;
+    const nearX = Math.max(plat.x, Math.min(x, plat.x + plat.w));
+    const nearY = Math.max(plat.y, Math.min(y, plat.y + plat.h));
+    if (Math.hypot(x - nearX, y - nearY) <= radius) {
+      plat.hp--;
+      spawnParticles(nearX, plat.y, "#61d4c4", 10);
+      if (plat.hp <= 0) plat.destroyed = true;
+    }
+  }
+}
+
+function detonate(en, def) {
+  const player = state.jugador;
+  spawnParticles(en.x, en.y - en.h * 0.55, "#ffb13b", 24);
+  spawnParticles(en.x, en.y - en.h * 0.55, "#e85328", 16);
+  state.screenShake = 1;
+  destroyPlatforms(en.x, en.y, def.blastRadius);
+  if (Math.hypot(player.x - en.x, (player.y - 10) - en.y) < def.blastRadius) {
+    damagePlayer(1, Math.sign(player.x - en.x) || en.direccion, { blockable: true });
+  }
+  const idx = state.enemigos.indexOf(en);
+  if (idx >= 0) state.enemigos.splice(idx, 1);
+}
+
+function updateExplosivo(en, def, dx, dt) {
+  chase(en, def, dx);
+  en.fuse = Math.abs(dx) < 26 ? (en.fuse ?? def.fuse) - dt : def.fuse;
+  if (en.fuse <= 0) detonate(en, def);
+}
+
+function updateIncendiario(en, def, dx, dt) {
+  const dist = Math.abs(dx);
+  en.direccion = dx >= 0 ? 1 : -1;
+  en.vx = dist < def.fleeDist ? -en.direccion * def.velocidad : dist > def.keepDist ? en.direccion * def.velocidad * 0.65 : 0;
+  en.atkTimer -= dt;
+  if (dist < def.keepDist + 18 && en.atkTimer <= 0) {
+    en.atkTimer = rand(1.7, 2.5);
+    state.proyectiles.push({ tipo: "bomba", x: en.x + en.direccion * 7, y: en.y - en.h * 0.65, vx: def.fireSpeed * en.direccion, vy: -125, dmg: 1, life: 1.25 });
+  }
+}
+
 export function updateEnemies(dt) {
   if (state.fase !== "playing") return;
   const jugador = state.jugador;
@@ -203,6 +251,8 @@ export function updateEnemies(dt) {
         case "arquero": updateArchero(en, def, dx, dt); break;
         case "veloz": updateVeloz(en, def, dx); break;
         case "escudo": updateEscudo(en, def, dx, dt); break;
+        case "explosivo": updateExplosivo(en, def, dx, dt); break;
+        case "incendiario": updateIncendiario(en, def, dx, dt); break;
         default: chase(en, def, dx); break;
       }
     }
@@ -210,8 +260,8 @@ export function updateEnemies(dt) {
     applyPhysics(en, dt);
 
     // contacto cuerpo a cuerpo con el jugador
-    if (en.atkTimer > 0 && en.tipo !== "arquero") en.atkTimer -= dt;
-    const canTouch = en.tipo !== "arquero" || Math.abs(dx) < 14;
+    if (en.atkTimer > 0 && en.tipo !== "arquero" && en.tipo !== "incendiario") en.atkTimer -= dt;
+    const canTouch = !["arquero", "incendiario", "explosivo"].includes(en.tipo) || Math.abs(dx) < 14;
     if (canTouch && en.atkTimer <= 0 && aabbOverlap(aabb(en), aabb(jugador))) {
       const dir = Math.sign(dx) || en.direccion;
       const knockback = en.tipo === "inmortal" ? 1.6 : 1;
@@ -333,7 +383,29 @@ function drawInmortal(ctx, en, phase, flash) {
   });
 }
 
-const DRAWERS = { normal: drawNormal, escudo: drawEscudo, arquero: drawArquero, veloz: drawVeloz, inmortal: drawInmortal };
+function drawExplosivo(ctx, en, phase, flash) {
+  withFacing(ctx, en.x, en.y, en.direccion === 1, () => {
+    const armed = en.fuse != null && en.fuse < 0.25;
+    glow(ctx, 0, -13, armed ? 14 : 7, armed ? "rgba(255,75,30,0.8)" : "rgba(255,130,35,0.35)", 1);
+    legs(ctx, phase * 1.8, "#3a2422", "#714030");
+    pxG(ctx, -4, -14, 8, 9, flash || "#b84a28", flash || "#5d2622", COLORS.outline);
+    px(ctx, -2, -20, 4, 4, COLORS.skin);
+    circO(ctx, 5, -14, 4, armed ? "#fff0a0" : "#e88b32", COLORS.outline);
+    px(ctx, 4.5, -17, 1, 2, "#f5d65c");
+  });
+}
+
+function drawIncendiario(ctx, en, phase, flash) {
+  withFacing(ctx, en.x, en.y, en.direccion === 1, () => {
+    legs(ctx, phase, "#183f42", "#28665f");
+    pxG(ctx, -4, -15, 8, 10, flash || "#3f9185", flash || "#174b4c", COLORS.outline);
+    px(ctx, -2, -21, 4, 4, COLORS.skin);
+    pxG(ctx, -3, -24, 6, 3, "#62cfc0", "#216a67", COLORS.outline);
+    circO(ctx, 6, -15, 3.5, "#ef8c32", COLORS.outline);
+  });
+}
+
+const DRAWERS = { normal: drawNormal, escudo: drawEscudo, arquero: drawArquero, veloz: drawVeloz, inmortal: drawInmortal, explosivo: drawExplosivo, incendiario: drawIncendiario };
 
 export function drawEnemy(ctx, en) {
   const phase = Math.abs(en.vx) > 4 ? en.x * 0.6 : Math.sin(state.tiempoPartida * 3 + en.seed) * 0.5;
