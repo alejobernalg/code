@@ -49,6 +49,7 @@ function freshPlayer() {
     estadoTimer: 0,
     cubriendose: false,
     invulnTimer: 0,
+    bashInvulnTimer: 0,
     meleeCooldown: 0,
     zHeld: false,
     zHoldTime: 0,
@@ -166,7 +167,7 @@ export function endGame() {
  */
 export function damagePlayer(amount = 1, knockbackDir = 0, { blockable = true } = {}) {
   const p = state.jugador;
-  if (state.fase !== "playing" || p.estado === "dead" || p.invulnTimer > 0) return false;
+  if (state.fase !== "playing" || p.estado === "dead" || p.invulnTimer > 0 || p.bashInvulnTimer > 0) return false;
 
   if (blockable && p.cubriendose) {
     sfx.block();

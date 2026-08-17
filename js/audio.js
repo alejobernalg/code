@@ -5,9 +5,20 @@
 let ctx = null;
 let masterGain = null;
 let noiseBuffer = null;
-let ambientStarted = false;
-let ambientTimer = null;
+let unlocked = false;
+let onUnlock = null;
+let spartaCryBuffer = null;
+let spartaCryLoading = false;
 export let muted = false;
+
+const SPARTA_CRY_URL = "sparta-au-au-au.mp3";
+const SPARTA_CRY_DURATION = 3.5; // recortado a los primeros 3.5s del archivo
+
+/** Registra un callback a correr una única vez, justo cuando se desbloquea
+ *  el audio. Así el llamador (main.js) puede decidir SI corresponde sonar
+ *  algo (p. ej. solo en la pantalla de inicio) sin que audio.js necesite
+ *  importar state.js — evita el ciclo de dependencia state.js -> audio.js. */
+export function setOnUnlock(cb) { onUnlock = cb; }
 
 function buildNoiseBuffer() {
   const len = ctx.sampleRate * 0.3;
@@ -15,6 +26,19 @@ function buildNoiseBuffer() {
   const data = buf.getChannelData(0);
   for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
   return buf;
+}
+
+/** Carga y decodifica el grito de guerra una sola vez; no hace falta
+ *  recortar el archivo en disco, AudioBufferSourceNode.start() ya acepta
+ *  un offset/duración para reproducir solo el tramo que interesa. */
+function loadSpartaCry() {
+  if (spartaCryBuffer || spartaCryLoading) return;
+  spartaCryLoading = true;
+  fetch(SPARTA_CRY_URL)
+    .then(res => res.arrayBuffer())
+    .then(data => ctx.decodeAudioData(data))
+    .then(decoded => { spartaCryBuffer = decoded; })
+    .catch(() => { spartaCryLoading = false; });
 }
 
 /** Debe llamarse tras un gesto del usuario (click/tecla) para desbloquear audio. */
@@ -27,11 +51,12 @@ export function unlockAudio() {
     masterGain.gain.value = muted ? 0 : 0.32;
     masterGain.connect(ctx.destination);
     noiseBuffer = buildNoiseBuffer();
+    loadSpartaCry();
   }
   if (ctx.state === "suspended") ctx.resume();
-  if (!ambientStarted) {
-    ambientStarted = true;
-    scheduleAmbient();
+  if (!unlocked) {
+    unlocked = true;
+    onUnlock?.();
   }
 }
 
@@ -72,14 +97,6 @@ function noiseBurst(dur, vol = 0.2, delay = 0) {
   src.stop(t0 + dur + 0.02);
 }
 
-function scheduleAmbient() {
-  if (!ctx) return;
-  tone(70, 0.22, "sine", { vol: 0.12 });
-  noiseBurst(0.05, 0.05);
-  const next = 620 + Math.random() * 260;
-  ambientTimer = setTimeout(scheduleAmbient, next);
-}
-
 export const sfx = {
   melee() { tone(190, 0.08, "square", { sweep: -70, vol: 0.28 }); },
   meleeHit() { noiseBurst(0.06, 0.22); tone(140, 0.06, "square", { vol: 0.2 }); },
@@ -110,5 +127,16 @@ export const sfx = {
     tone(140, 0.4, "sawtooth", { vol: 0.24, delay: 0.42 });
   },
   start() { tone(300, 0.1, "square", { vol: 0.25 }); tone(500, 0.14, "square", { vol: 0.25, delay: 0.1 }); },
-  menuMove() { tone(420, 0.05, "square", { vol: 0.16 }); }
+  menuMove() { tone(420, 0.05, "square", { vol: 0.16 }); },
+  /** Grito de guerra espartano ("au au au"), recortado a sus primeros 3.5s. */
+  spartanCry() {
+    if (!ctx || !spartaCryBuffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = spartaCryBuffer;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.55;
+    src.connect(gain);
+    gain.connect(masterGain);
+    src.start(ctx.currentTime, 0, SPARTA_CRY_DURATION);
+  }
 };

@@ -61,13 +61,18 @@ function doChargedAttack() {
  * en que baja el escudo. Sin esto, cubrirse era una trampa: te protegía
  * pero dejaba a los enemigos pegados a vos, listos para golpearte apenas
  * soltabas C.
+ *
+ * Usa su propio bashInvulnTimer en vez de invulnTimer a propósito: este
+ * último también hace parpadear el sprite (el aviso visual de "recién
+ * golpeado"), y el empujón de escudo no es un golpe — parpadear ahí hacía
+ * parecer que el jugador había sido dañado sin motivo.
  */
 function doShieldBash() {
   const p = state.jugador;
   sfx.block();
   state.screenShake = Math.max(state.screenShake, 0.6);
   spawnParticles(p.x, p.y - p.h * 0.5, COLORS.shieldRim, 12);
-  p.invulnTimer = Math.max(p.invulnTimer, BASH_INVULN);
+  p.bashInvulnTimer = Math.max(p.bashInvulnTimer, BASH_INVULN);
 
   for (const en of state.enemigos) {
     const dx = en.x - p.x;
@@ -97,6 +102,7 @@ export function updatePlayer(dt) {
   if (state.fase !== "playing" || p.estado === "dead") return;
 
   if (p.invulnTimer > 0) p.invulnTimer -= dt;
+  if (p.bashInvulnTimer > 0) p.bashInvulnTimer -= dt;
   if (p.meleeCooldown > 0) p.meleeCooldown -= dt;
   if (p.chargeCooldown > 0) {
     p.chargeCooldown -= dt;

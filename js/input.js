@@ -53,6 +53,13 @@ function releaseCode(code) {
 }
 
 export function initInput(canvas) {
+  // Desbloqueo de audio ante CUALQUIER primer gesto en la página, no solo
+  // sobre el canvas — un clic en el botón de sonido, en el margen, etc.
+  // también cuenta. Sin esto, si el primer gesto cae fuera del canvas
+  // (p. ej. el botón de silenciar) el audio nunca se desbloqueaba.
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
+
   window.addEventListener("keydown", (e) => {
     if (PREVENTABLE.has(e.code)) e.preventDefault();
     unlockAudio();

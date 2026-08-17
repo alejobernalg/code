@@ -11,7 +11,7 @@ import { updateArrowRain, drawArrowRainOverlay, drawFallingArrows } from "./arro
 import { drawBackground, drawVignette } from "./background.js";
 import { updateParticles, drawParticles } from "./particles.js";
 import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen, drawLevelCompleteScreen } from "./hud.js";
-import { toggleMute, sfx } from "./audio.js";
+import { toggleMute, sfx, setOnUnlock, unlockAudio } from "./audio.js";
 
 const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
@@ -25,6 +25,23 @@ muteBtn.addEventListener("click", () => {
   const isMuted = toggleMute();
   muteBtn.textContent = isMuted ? "🔇" : "🔊";
 });
+
+// Grito de guerra de fondo en la pantalla de título: arranca en cuanto el
+// audio se desbloquea (requiere un gesto del usuario) y se repite mientras
+// siga en la fase "start" — deja de sonar solo en cuanto el jugador avanza.
+function scheduleSpartanChant() {
+  if (state.fase !== "start") return;
+  sfx.spartanCry();
+  setTimeout(scheduleSpartanChant, 8000);
+}
+setOnUnlock(scheduleSpartanChant);
+
+// Intento inmediato al cargar: en la mayoría de los navegadores el audio
+// seguirá bloqueado hasta el primer gesto (política de autoplay, no algo
+// que se pueda saltear desde código), pero de paso deja el clip ya
+// descargado y decodificado para que suene sin demora en cuanto sí se
+// desbloquee con esa primera interacción.
+unlockAudio();
 
 let animTime = 0;
 
