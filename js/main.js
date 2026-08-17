@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Punto de entrada: arma el canvas, conecta módulos y corre el bucle
 // ---------------------------------------------------------------------
-import { W, H } from "./config.js";
+import { W, H, LEVEL_COUNT } from "./config.js";
 import { state, resetState, updateMeta, moveLevelSelection } from "./state.js";
 import { input, initInput, initTouchControls, clearEdges } from "./input.js";
 import { updatePlayer, drawPlayer } from "./player.js";
@@ -47,7 +47,7 @@ function update(dt) {
     if (input.confirmPressed) state.fase = "levelSelect";
   } else if (state.fase === "levelComplete") {
     if (input.confirmPressed) {
-      if (state.nivel < 10) resetState(state.nivel + 1);
+      if (state.nivel < LEVEL_COUNT) resetState(state.nivel + 1);
       else state.fase = "levelSelect";
       sfx.start();
     }

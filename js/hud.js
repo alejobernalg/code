@@ -4,6 +4,7 @@
 import { W, H, COLORS, JAVELIN_MAX, LEVEL_COUNT } from "./config.js";
 import { pixelText, px, roundRect, glow } from "./utils.js";
 import { state } from "./state.js";
+import { drawPlayer } from "./player.js";
 
 function shadowText(ctx, text, x, y, color, size = 8, align = "left") {
   pixelText(ctx, text, x + 1, y + 1, "rgba(0,0,0,0.6)", size, align);
@@ -100,46 +101,21 @@ export function drawHUD(ctx) {
   }
 }
 
-/** Casco corintio grande con cresta — emblema de la pantalla de título. */
-function drawEmblem(ctx, cx, cy, time) {
-  const bob = Math.sin(time * 1.4) * 1.5;
-  cy += bob;
-  glow(ctx, cx, cy - 2, 42, "rgba(255,150,70,0.4)", 1);
-
-  const crestOuter = ctx.createLinearGradient(cx, cy - 36, cx, cy - 4);
-  crestOuter.addColorStop(0, COLORS.spartanRedHi);
-  crestOuter.addColorStop(1, COLORS.spartanRedDark);
-  ctx.strokeStyle = crestOuter;
-  ctx.lineWidth = 7;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(cx - 17, cy - 3);
-  ctx.quadraticCurveTo(cx, cy - 36, cx + 17, cy - 3);
-  ctx.stroke();
-  ctx.strokeStyle = COLORS.spartanRedLight;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(cx - 14, cy - 5);
-  ctx.quadraticCurveTo(cx, cy - 29, cx + 14, cy - 5);
-  ctx.stroke();
-
-  const domeGrad = ctx.createLinearGradient(0, cy - 15, 0, cy + 9);
-  domeGrad.addColorStop(0, COLORS.bronzeHi);
-  domeGrad.addColorStop(0.6, COLORS.bronze);
-  domeGrad.addColorStop(1, COLORS.bronzeDark);
-  roundRect(ctx, cx - 18, cy - 16, 36, 24, 11, COLORS.outline);
-  roundRect(ctx, cx - 16, cy - 14, 32, 20, 10, domeGrad);
-
-  ctx.fillStyle = COLORS.outline;
-  ctx.fillRect(cx - 2.5, cy - 14, 5, 17);
-  ctx.fillStyle = "#0a0508";
-  ctx.fillRect(cx - 13.5, cy - 5, 8, 4.5);
-  ctx.fillRect(cx + 5.5, cy - 5, 8, 4.5);
-
-  ctx.fillStyle = "rgba(255,255,255,0.4)";
-  ctx.beginPath();
-  ctx.ellipse(cx - 8, cy - 9, 4.5, 2.2, -0.4, 0, Math.PI * 2);
-  ctx.fill();
+/**
+ * Espartano estático de la pantalla de título: reutiliza el sprite real del
+ * jugador (siempre en reposo ahí, ya que updatePlayer no corre en fase
+ * "start") reescalado y reubicado, en vez de duplicar el dibujo del
+ * personaje. Solo lleva la tela de la capa un leve vaivén propio del sprite;
+ * el resto de la pose queda completamente quieto.
+ */
+function drawStaticHero(ctx, cx, feetY, scale) {
+  glow(ctx, cx, feetY - 30 * scale, 46, "rgba(255,150,70,0.35)", 1);
+  ctx.save();
+  ctx.translate(cx, feetY);
+  ctx.scale(scale, scale);
+  ctx.translate(-state.jugador.x, -state.jugador.y);
+  drawPlayer(ctx);
+  ctx.restore();
 }
 
 const CONTROLS = [
@@ -168,7 +144,7 @@ export function drawStartScreen(ctx, time) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  drawEmblem(ctx, W / 2, 46, time);
+  drawStaticHero(ctx, W / 2, 63, 1.5);
 
   shadowText(ctx, "EL ÚLTIMO ESPARTANO", W / 2, 66, "#ff7a4a", 14, "center");
   shadowText(ctx, "Defiende el paso de las Termópilas", W / 2, 84, COLORS.white, 7, "center");
@@ -199,12 +175,12 @@ export function drawLevelSelectScreen(ctx, time) {
 
   shadowText(ctx, "ELIGE TU NIVEL", W / 2, 20, "#ff7a4a", 12, "center");
 
-  const cols = 5, rows = 2;
-  const tileW = 42, tileH = 36, gapX = 8, gapY = 10;
+  const cols = LEVEL_COUNT, rows = 1;
+  const tileW = 56, tileH = 46, gapX = 12, gapY = 10;
   const gridW = cols * tileW + (cols - 1) * gapX;
   const gridH = rows * tileH + (rows - 1) * gapY;
   const startX = W / 2 - gridW / 2;
-  const startY = 42;
+  const startY = 56;
 
   for (let i = 0; i < LEVEL_COUNT; i++) {
     const col = i % cols, row = Math.floor(i / cols);

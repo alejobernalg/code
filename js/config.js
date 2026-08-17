@@ -6,7 +6,7 @@ export const W = 320;
 export const H = 224;
 
 // -- niveles --
-export const LEVEL_COUNT = 10;
+export const LEVEL_COUNT = 4;
 
 // -- física --
 export const GRAVITY = 780;
