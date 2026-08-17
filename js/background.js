@@ -11,6 +11,17 @@ const clouds = [
   { x: 240, y: 34, w: 30, h: 5, speed: 1.5 }
 ];
 
+const duskDust = [];
+for (let i = 0; i < 22; i++) {
+  duskDust.push({
+    x: Math.random() * W,
+    y: 20 + Math.random() * 150,
+    speed: 8 + Math.random() * 16,
+    drift: Math.random() * Math.PI * 2,
+    size: Math.random() < 0.3 ? 2 : 1
+  });
+}
+
 const embers = [];
 for (let i = 0; i < 16; i++) {
   embers.push({
@@ -247,10 +258,114 @@ function drawCavePlatform(ctx, plat) {
   if (plat.destructible) px(ctx, plat.x + plat.w / 2 - 2, plat.y + 2, 4, 1, "#d4fff0");
 }
 
+/**
+ * Nivel 2 — cañón polvoriento: paredes de roca cerrándose sobre un corredor
+ * angosto, luz de atardecer filtrada por una bruma dorada densa (sin sol
+ * nítido como en Termópilas: aquí apenas es un resplandor difuso) y el
+ * fondo poblado de siluetas de guerra lejanas, fiel al tono de una carga
+ * de bestias de guerra sobre el desierto.
+ */
+function drawCanyonSky(ctx, horizon) {
+  const grad = ctx.createLinearGradient(0, 0, 0, horizon);
+  grad.addColorStop(0, "#2a1a12");
+  grad.addColorStop(0.35, "#5a3420");
+  grad.addColorStop(0.7, COLORS.duskAmber);
+  grad.addColorStop(1, COLORS.duskHaze);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, horizon);
+  glow(ctx, W / 2, horizon - 10, 90, "rgba(240, 190, 120, 0.4)", 1);
+}
+
+function drawCanyonWalls(ctx, baseY) {
+  const wallGrad = ctx.createLinearGradient(0, 0, 0, baseY + 10);
+  wallGrad.addColorStop(0, "#1c130e");
+  wallGrad.addColorStop(1, "#0e0906");
+  ctx.fillStyle = wallGrad;
+  // pared izquierda
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(46, 0); ctx.lineTo(34, 30); ctx.lineTo(50, 58);
+  ctx.lineTo(30, 92); ctx.lineTo(44, 130); ctx.lineTo(26, baseY + 10);
+  ctx.lineTo(0, baseY + 10); ctx.closePath(); ctx.fill();
+  // pared derecha
+  ctx.beginPath();
+  ctx.moveTo(W, 0); ctx.lineTo(W - 46, 0); ctx.lineTo(W - 34, 30); ctx.lineTo(W - 50, 58);
+  ctx.lineTo(W - 30, 92); ctx.lineTo(W - 44, 130); ctx.lineTo(W - 26, baseY + 10);
+  ctx.lineTo(W, baseY + 10); ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = "rgba(230,170,100,0.28)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath(); ctx.moveTo(4, 10 + i * 24); ctx.lineTo(30, 4 + i * 24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W - 4, 10 + i * 24); ctx.lineTo(W - 30, 4 + i * 24); ctx.stroke();
+  }
+
+  // siluetas de guerra distantes, apenas visibles en la bruma
+  ctx.fillStyle = "rgba(20,12,8,0.55)";
+  for (let x = 60; x < W - 60; x += 26) {
+    const h = 8 + ((x * 7) % 6);
+    ctx.fillRect(x, baseY - h, 2, h);
+  }
+}
+
+function drawCanyonFloor(ctx, y) {
+  const grad = ctx.createLinearGradient(0, y, 0, H);
+  grad.addColorStop(0, "#4a3018");
+  grad.addColorStop(0.3, "#2a1a0e");
+  grad.addColorStop(1, "#140c06");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, y, W, H - y);
+  ctx.fillStyle = "rgba(230,170,100,0.15)";
+  for (let x = 0; x < W; x += 18) {
+    if ((x * 13) % 7 < 3) px(ctx, x, y + 3 + ((x * 5) % 10), 6, 1, "rgba(230,170,100,0.15)");
+  }
+}
+
+function drawDuskDust(ctx, time, dt) {
+  ctx.fillStyle = "#e0b878";
+  for (const d of duskDust) {
+    d.x -= d.speed * dt;
+    if (d.x < -4) d.x = W + 4;
+    const y = d.y + Math.sin(time * 1.4 + d.drift) * 6;
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(Math.round(d.x), Math.round(y), d.size, d.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRockLedge(ctx, plat) {
+  const g = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.h);
+  g.addColorStop(0, "#8a6440");
+  g.addColorStop(0.3, "#5c4028");
+  g.addColorStop(1, "#2a1c10");
+  ctx.fillStyle = g;
+  ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  px(ctx, plat.x, plat.y, plat.w, 1, "#c9955a");
+  ctx.fillStyle = "rgba(20,12,6,0.4)";
+  for (let x = plat.x + 6; x < plat.x + plat.w; x += 11) {
+    const h = 2 + ((x * 3) % 3);
+    ctx.fillRect(x, plat.y + 1, 4, h);
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(plat.x, plat.y + plat.h, plat.w, 4);
+}
+
+function drawCanyon(ctx, time, dt) {
+  const horizon = 150;
+  drawCanyonSky(ctx, horizon);
+  drawCanyonWalls(ctx, 158);
+  drawDuskDust(ctx, time, dt);
+  drawCanyonFloor(ctx, 176);
+}
+
 export function drawBackground(ctx, time, dt = 0) {
   if (state.nivel === 3) {
     drawCave(ctx, time);
     for (const plat of activePlatforms) drawCavePlatform(ctx, plat);
+    return;
+  }
+  if (state.nivel === 2) {
+    drawCanyon(ctx, time, dt);
+    for (const plat of activePlatforms) if (!plat.destroyed) drawRockLedge(ctx, plat);
     return;
   }
   const horizon = 178;

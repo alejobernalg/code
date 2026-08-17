@@ -35,12 +35,25 @@ const CAVE_PLATFORMS = [
   { x: 214, y: 96, w: 66, h: 8, tier: 3, destructible: true, hp: 1 }
 ];
 
+// Nivel 2 — corredor del cañón: la bestia embiste en línea recta a ras de
+// suelo, así que las tres cornisas quedan todas a una altura alcanzable de
+// un solo salto (no hay torre de plataformas que escalar): son refugios de
+// esquive, no un recorrido de plataformeo.
+const CANYON_PLATFORMS = [
+  { x: 0, y: 200, w: 320, h: 24, tier: 0 },
+  { x: 18, y: 158, w: 56, h: 8, tier: 1 },
+  { x: 132, y: 158, w: 56, h: 8, tier: 1 },
+  { x: 246, y: 158, w: 56, h: 8, tier: 1 }
+];
+
 export const LEVELS = Array.from({ length: LEVEL_COUNT }, (_, i) => ({
   objective: 8 + i * 3,
   platforms: PLATFORMS,
   theme: "termopilas"
 }));
 LEVELS[2] = { objective: 20, platforms: CAVE_PLATFORMS, theme: "cueva" };
+// Dos derrotas: el rinoceronte cae rápido y dispara al elefante de guerra.
+LEVELS[1] = { objective: 2, platforms: CANYON_PLATFORMS, theme: "corredor" };
 
 export let activePlatforms = PLATFORMS;
 export function setActiveLevel(level) {
@@ -79,6 +92,14 @@ export const RAIN_BONUS_SCORE = 200;
 
 // -- combo --
 export const COMBO_WINDOW = 2.0;
+
+// -- bestias de guerra del nivel 2 (rinoceronte y elefante comparten la IA
+// de embestida en línea recta, solo cambian sus stats en ENEMY_DEFS) --
+export const RINO_PACE_TIME = [0.9, 1.5];       // acecho antes de anunciar la embestida
+export const RINO_TELEGRAPH_TIME = 0.55;        // aviso: se detiene y agacha la testuz
+export const RINO_CHARGE_MAX_TIME = 1.6;        // tope si no llega a ningún borde
+export const RINO_STUN_TIME = 2.0;              // aturdida tras chocar — ventana de contraataque
+export const RINO_RECOVER_TIME = [1.0, 1.8];    // pausa tras recuperarse antes de volver a acechar
 
 // -- puntuación --
 export const SCORES = {
@@ -158,7 +179,32 @@ export const COLORS = {
   white: "#f0e6d2",
   hpFill: "#c0332a",
   blockSpark: "#ffe08a",
-  warning: "#ff3a3a"
+  warning: "#ff3a3a",
+
+  rinoHide: "#6b5a48",
+  rinoHideHi: "#9a8264",
+  rinoHideDark: "#3a2f24",
+  rinoArmor: "#8a6a3a",
+  rinoArmorHi: "#c9a15a",
+  rinoArmorDark: "#4a3818",
+  rinoChain: "#c4c4bc",
+  rinoHorn: "#e8ddc4",
+  rinoHornTip: "#4a4038",
+  rinoEye: "#ff9a3a",
+
+  duskGold: "#e0a458",
+  duskAmber: "#a86838",
+  duskHaze: "#f0c88a",
+
+  elefHide: "#5a5a5e",
+  elefHideHi: "#84848a",
+  elefHideDark: "#2c2c30",
+  elefIvory: "#f0e8d0",
+  elefIvoryDark: "#b0a480",
+  elefHowdah: "#7a5230",
+  elefHowdahHi: "#a87a48",
+  elefHowdahDark: "#3e2818",
+  elefBanner: "#8a2a24"
 };
 
 // -- definiciones de enemigos --
@@ -169,7 +215,9 @@ export const ENEMY_DEFS = {
   veloz:    { vida: 1, velocidad: 62, dmg: 1, hw: 5, h: 19, score: SCORES.veloz },
   inmortal: { vida: 5, velocidad: 20, dmg: 1, hw: 9, h: 26, score: SCORES.inmortal, knockback: 140 },
   explosivo: { vida: 1, velocidad: 92, dmg: 1, hw: 5, h: 19, score: 90, blastRadius: 31, fuse: 0.48 },
-  incendiario: { vida: 2, velocidad: 28, dmg: 1, hw: 6, h: 20, score: 110, fireSpeed: 105, keepDist: 88, fleeDist: 38 }
+  incendiario: { vida: 2, velocidad: 28, dmg: 1, hw: 6, h: 20, score: 110, fireSpeed: 105, keepDist: 88, fleeDist: 38 },
+  rinoceronte: { vida: 5, velocidad: 24, dmg: 1, hw: 16, h: 32, score: 200, chargeSpeed: 235 },
+  elefante: { vida: 24, velocidad: 18, dmg: 2, hw: 21, h: 44, score: 1200, chargeSpeed: 190 }
 };
 
 export function clamp(v, min, max) {

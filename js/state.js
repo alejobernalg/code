@@ -88,7 +88,11 @@ export const state = {
   },
 
   spawnTimer: 1.2,
-  proximoInmortal: 42
+  proximoInmortal: 42,
+  rinoTimer: 1.4,
+  jefeGenerado: false,
+  avisoJefe: null,
+  avisoJefeTimer: 0
 };
 
 export function resetState(nivel = state.nivelSeleccionado) {
@@ -111,7 +115,16 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.lluvia = { fase: "normal", timer: randUtil(RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL), danoRecibido: false, bonusTimer: 0 };
   state.spawnTimer = 1.2;
   state.proximoInmortal = 42;
+  state.rinoTimer = 1.4;
+  state.jefeGenerado = false;
+  state.avisoJefe = null;
+  state.avisoJefeTimer = 0;
   particles.length = 0;
+}
+
+export function announceBoss(nombre, duration = 2.4) {
+  state.avisoJefe = nombre;
+  state.avisoJefeTimer = duration;
 }
 
 export function registerEnemyDefeat() {
@@ -191,4 +204,5 @@ export function updateMeta(dt) {
     if (state.comboTimer <= 0) state.comboActual = 0;
   }
   if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt * 3.2);
+  if (state.avisoJefeTimer > 0) state.avisoJefeTimer -= dt;
 }
