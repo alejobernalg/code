@@ -1,12 +1,15 @@
 // ---------------------------------------------------------------------
 // Enemigos: definiciones, IA, spawner, resolución de daño y sprites
 // ---------------------------------------------------------------------
-import { W, activePlatforms, GROUND_Y, ENEMY_DEFS, COLORS, JUMP_VELOCITY } from "./config.js";
+import { W, activePlatforms, GROUND_Y, ENEMY_DEFS, COLORS, JUMP_VELOCITY, RINO_PACE_TIME, RINO_TELEGRAPH_TIME, RINO_CHARGE_MAX_TIME, RINO_STUN_TIME, RINO_RECOVER_TIME } from "./config.js";
 import { applyPhysics, aabb, aabbOverlap, rand, px, pxG, circO, glow } from "./utils.js";
 import { spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
-import { state, awardScore, damagePlayer, registerEnemyDefeat } from "./state.js";
+import { state, awardScore, damagePlayer, registerEnemyDefeat, announceBoss } from "./state.js";
 let nextId = 1;
+
+const BOSS_ANNOUNCE = { rinoceronte: "¡BESTIA DE GUERRA!", elefante: "¡ELEFANTE DE GUERRA!" };
+const isBestiaCarga = (tipo) => tipo === "rinoceronte" || tipo === "elefante";
 
 // -----------------------------------------------------------------------
 // SPAWNER
@@ -25,9 +28,10 @@ function poolForTime(t) {
   return pool;
 }
 
-function pickSpawnPoint(side) {
+function pickSpawnPoint(side, tipo) {
   const fromLeft = side === "left";
-  const onPlatform = Math.random() < 0.3;
+  // El jefe siempre entra por el suelo del corredor, nunca sobre una cornisa.
+  const onPlatform = !isBestiaCarga(tipo) && Math.random() < 0.3;
   if (onPlatform) {
     const candidates = activePlatforms.filter(p => p.tier > 0 && !p.destroyed);
     const plat = candidates[fromLeft ? 0 : candidates.length - 1];
@@ -38,9 +42,9 @@ function pickSpawnPoint(side) {
 
 export function spawnEnemy(tipo, side) {
   const def = ENEMY_DEFS[tipo];
-  const point = pickSpawnPoint(side);
+  const point = pickSpawnPoint(side, tipo);
   const dir = side === "left" ? 1 : -1;
-  state.enemigos.push({
+  const enemy = {
     id: nextId++,
     tipo,
     x: point.x, y: point.y,
@@ -56,12 +60,31 @@ export function spawnEnemy(tipo, side) {
     fleeing: false,
     decisionTimer: rand(0.15, 0.4),
     staggerTimer: 0
-  });
+  };
+  if (isBestiaCarga(tipo)) {
+    enemy.faseCarga = "acecho";
+    enemy.faseTimer = rand(...RINO_PACE_TIME);
+    enemy.cargaDir = dir;
+    announceBoss(BOSS_ANNOUNCE[tipo]);
+  }
+  state.enemigos.push(enemy);
   spawnParticles(point.x, point.y - def.h * 0.5, "rgba(255,220,150,0.5)", 4);
 }
 
 export function updateSpawner(dt) {
   if (state.fase !== "playing") return;
+
+  // Nivel 2: combate 1 contra 1 contra la bestia — sin oleadas ni jefe extra.
+  if (state.nivel === 2) {
+    if (!state.jefeGenerado) {
+      state.rinoTimer -= dt;
+      if (state.rinoTimer <= 0) {
+        spawnEnemy("rinoceronte", Math.random() < 0.5 ? "left" : "right");
+        state.jefeGenerado = true;
+      }
+    }
+    return;
+  }
 
   // mini-jefe Inmortal, por tiempo de partida
   if (state.tiempoPartida >= state.proximoInmortal) {
@@ -106,12 +129,17 @@ export function damageEnemy(en, dmg, { bypassShield = false, attackerX = null } 
   if (en.vida <= 0) {
     const def = ENEMY_DEFS[en.tipo];
     const mult = awardScore(def.score);
-    sfx.enemyDown(en.tipo === "inmortal");
+    sfx.enemyDown(en.tipo === "inmortal" || isBestiaCarga(en.tipo));
     if (mult > 1) sfx.combo(mult);
     spawnParticles(en.x, en.y - en.h * 0.6, COLORS.white, 12);
     const idx = state.enemigos.indexOf(en);
     if (idx >= 0) state.enemigos.splice(idx, 1);
     registerEnemyDefeat();
+    // El rinoceronte es solo la primera oleada del jefe del nivel 2: al
+    // caer, entra el elefante de guerra — la amenaza real de la pelea.
+    if (en.tipo === "rinoceronte" && state.nivel === 2 && state.fase === "playing") {
+      spawnEnemy("elefante", en.x < W / 2 ? "left" : "right");
+    }
   }
   return true;
 }
@@ -188,6 +216,63 @@ function updateVeloz(en, def, dx) {
   }
 }
 
+/**
+ * IA compartida por las dos bestias de guerra del nivel 2 (rinoceronte y
+ * elefante): acecha despacio, se detiene y agacha la testuz como aviso, y
+ * luego embiste en línea recta a la dirección fijada en ese instante — no
+ * vuelve a corregir rumbo en pleno galope, así que subir a una de las
+ * cornisas del corredor esquiva el golpe por completo. Al llegar a un borde
+ * de la pantalla (o agotar el tiempo máximo) queda aturdida: ventana segura
+ * para contraatacar antes de que retome el acecho.
+ */
+function updateBestiaCarga(en, def, dx, dt) {
+  en.faseTimer -= dt;
+  switch (en.faseCarga) {
+    case "acecho":
+      en.direccion = dx >= 0 ? 1 : -1;
+      en.vx = en.direccion * def.velocidad;
+      if (en.faseTimer <= 0) {
+        en.faseCarga = "aviso";
+        en.faseTimer = RINO_TELEGRAPH_TIME;
+        en.cargaDir = dx >= 0 ? 1 : -1;
+        en.direccion = en.cargaDir;
+        en.vx = 0;
+        sfx.charge();
+      }
+      break;
+    case "aviso":
+      en.vx = 0;
+      if (en.faseTimer <= 0) {
+        en.faseCarga = "carga";
+        en.faseTimer = RINO_CHARGE_MAX_TIME;
+        en.vx = en.cargaDir * def.chargeSpeed;
+        state.screenShake = Math.max(state.screenShake, 0.5);
+        sfx.chargeRelease();
+      }
+      break;
+    case "carga": {
+      en.vx = en.cargaDir * def.chargeSpeed;
+      const atEdge = (en.cargaDir < 0 && en.x <= en.hw + 1.5) || (en.cargaDir > 0 && en.x >= W - en.hw - 1.5);
+      if (atEdge || en.faseTimer <= 0) {
+        en.faseCarga = "aturdido";
+        en.faseTimer = RINO_STUN_TIME;
+        en.vx = 0;
+        sfx.block();
+        state.screenShake = Math.max(state.screenShake, 0.8);
+        spawnParticles(en.x, en.y - 2, "rgba(180,150,110,0.6)", 10);
+      }
+      break;
+    }
+    case "aturdido":
+      en.vx = 0;
+      if (en.faseTimer <= 0) {
+        en.faseCarga = "acecho";
+        en.faseTimer = rand(...RINO_RECOVER_TIME);
+      }
+      break;
+  }
+}
+
 function destroyPlatforms(x, y, radius) {
   for (const plat of activePlatforms) {
     if (!plat.destructible || plat.destroyed) continue;
@@ -253,6 +338,7 @@ export function updateEnemies(dt) {
         case "escudo": updateEscudo(en, def, dx, dt); break;
         case "explosivo": updateExplosivo(en, def, dx, dt); break;
         case "incendiario": updateIncendiario(en, def, dx, dt); break;
+        case "rinoceronte": case "elefante": updateBestiaCarga(en, def, dx, dt); break;
         default: chase(en, def, dx); break;
       }
     }
@@ -262,15 +348,33 @@ export function updateEnemies(dt) {
     // contacto cuerpo a cuerpo con el jugador
     if (en.atkTimer > 0 && en.tipo !== "arquero" && en.tipo !== "incendiario") en.atkTimer -= dt;
     const canTouch = !["arquero", "incendiario", "explosivo"].includes(en.tipo) || Math.abs(dx) < 14;
-    if (canTouch && en.atkTimer <= 0 && aabbOverlap(aabb(en), aabb(jugador))) {
+    // Aturdida, la bestia no golpea: es la ventana de contraataque prometida
+    // por el diseño del nivel, no solo un enemigo más pasivo.
+    const stunned = isBestiaCarga(en.tipo) && en.faseCarga === "aturdido";
+    if (canTouch && !stunned && en.atkTimer <= 0 && aabbOverlap(aabb(en), aabb(jugador))) {
+      const charging = isBestiaCarga(en.tipo) && en.faseCarga === "carga";
       const dir = Math.sign(dx) || en.direccion;
-      const knockback = en.tipo === "inmortal" ? 1.6 : 1;
-      const hit = damagePlayer(1, dir, { blockable: true });
-      if (hit) {
-        jugador.vx = dir * 95 * knockback;
-        jugador.vy = -150 * (knockback > 1 ? 1.1 : 1);
+
+      if (en.tipo === "elefante" && charging) {
+        // La embestida en sí es letal si te agarra de frente a ras de suelo.
+        // El elefante es tan alto que su trompa igual alcanza a un jugador
+        // parado en una cornisa — pero ese roce es mucho más perdonable
+        // (una vida) que quedar atrapado de lleno en su camino.
+        const onLedge = jugador.onGround && jugador.y < GROUND_Y - 2;
+        const hit = damagePlayer(onLedge ? 1 : 99, dir, { blockable: true });
+        if (hit) {
+          jugador.vx = dir * 95 * 2.6;
+          jugador.vy = -150 * 1.1;
+        }
+      } else {
+        const knockback = en.tipo === "inmortal" ? 1.6 : charging ? 2.2 : 1;
+        const hit = damagePlayer(charging ? 2 : 1, dir, { blockable: true });
+        if (hit) {
+          jugador.vx = dir * 95 * knockback;
+          jugador.vy = -150 * (knockback > 1 ? 1.1 : 1);
+        }
       }
-      en.atkTimer = 0.9;
+      en.atkTimer = charging ? 0.5 : 0.9;
     }
   }
 }
@@ -405,7 +509,223 @@ function drawIncendiario(ctx, en, phase, flash) {
   });
 }
 
-const DRAWERS = { normal: drawNormal, escudo: drawEscudo, arquero: drawArquero, veloz: drawVeloz, inmortal: drawInmortal, explosivo: drawExplosivo, incendiario: drawIncendiario };
+function drawRinoceronte(ctx, en, phase, flash) {
+  withFacing(ctx, en.x, en.y, en.direccion === 1, () => {
+    const aviso = en.faseCarga === "aviso";
+    const carga = en.faseCarga === "carga";
+    const aturdido = en.faseCarga === "aturdido";
+    const crouch = aviso ? 2 : 0;
+
+    // estela de polvo tras la embestida
+    if (carga) {
+      for (let i = 1; i <= 3; i++) {
+        ctx.globalAlpha = 0.22 * (4 - i) / 3;
+        ctx.fillStyle = COLORS.rinoHideDark;
+        ctx.beginPath();
+        ctx.ellipse(-8 - i * 7, 1, 7, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    px(ctx, -16, 1.5, 30, 2, "rgba(0,0,0,0.45)");
+
+    // patas — dos delante, dos atrás; zancada corta y pesada
+    const stride = (carga ? Math.sin(en.x * 0.9) : Math.sin(phase)) * (carga ? 4.5 : 2.2);
+    pxG(ctx, -12 - stride * 0.3, -10 + crouch, 5, 11, COLORS.rinoHideDark, "#1e1610", COLORS.outline);
+    pxG(ctx, 6 + stride * 0.3, -10 + crouch, 5, 11, COLORS.rinoHideDark, "#1e1610", COLORS.outline);
+    pxG(ctx, -9 + stride * 0.3, -11 + crouch, 5, 12, COLORS.rinoHideHi, COLORS.rinoHide, COLORS.outline);
+    pxG(ctx, 9 - stride * 0.3, -11 + crouch, 5, 12, COLORS.rinoHideHi, COLORS.rinoHide, COLORS.outline);
+
+    // cuerpo macizo
+    pxG(ctx, -15, -26 + crouch, 26, 17, flash || COLORS.rinoHideHi, flash || COLORS.rinoHideDark, COLORS.outline);
+    // plaquetas de hierro en el lomo
+    for (let i = -13; i <= 9; i += 5) px(ctx, i, -25 + crouch, 3.5, 3, i % 10 === -3 ? COLORS.rinoArmorHi : COLORS.rinoArmorDark);
+    // cola
+    ctx.strokeStyle = COLORS.rinoHideDark;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-15, -18 + crouch);
+    ctx.quadraticCurveTo(-21, -14 + crouch, -19, -8 + crouch);
+    ctx.stroke();
+
+    // testuz blindada — baja al avisar, embiste al frente
+    const headY = -22 + crouch + (aviso ? 4 : 0);
+    pxG(ctx, 6, headY - 8, 14, 12, flash || COLORS.rinoArmorHi, flash || COLORS.rinoArmorDark, COLORS.outline);
+    px(ctx, 7, headY - 8, 12, 2, flash || COLORS.rinoArmor);
+
+    // ojo — brasa encendida, más viva justo antes de embestir
+    const eyeGlow = aviso ? 5 : carga ? 4 : 2.5;
+    glow(ctx, 12, headY - 3, eyeGlow, "rgba(255,140,40,0.7)", 1);
+    px(ctx, 11, headY - 4, 1.6, 1.6, COLORS.rinoEye);
+
+    // cuerno envuelto en cadenas, con la punta de metal pulido
+    const hornLen = carga ? 15 : 12;
+    ctx.strokeStyle = COLORS.rinoHorn;
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(18, headY - 5);
+    ctx.lineTo(18 + hornLen, headY - 5);
+    ctx.stroke();
+    if (carga) glow(ctx, 18 + hornLen, headY - 5, 6, "rgba(255,255,255,0.65)", 0.8);
+    ctx.fillStyle = COLORS.rinoHornTip;
+    ctx.beginPath();
+    ctx.moveTo(18 + hornLen, headY - 8);
+    ctx.lineTo(18 + hornLen + 5, headY - 5);
+    ctx.lineTo(18 + hornLen, headY - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = COLORS.rinoChain;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(19 + i * 4, headY - 5, 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // aviso: resplandor rojo pulsante sobre la testuz
+    if (aviso) glow(ctx, 12, headY - 8, 12, "rgba(255,50,40,0.5)", 0.6 + Math.sin(state.tiempoPartida * 20) * 0.3);
+
+    // aturdida: estrellas girando sobre la cabeza
+    if (aturdido) {
+      const spin = state.tiempoPartida * 6;
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i * Math.PI * 2) / 3;
+        const sx = 6 + Math.cos(a) * 9, sy = headY - 16 + Math.sin(a) * 3;
+        ctx.fillStyle = "#ffe08a";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // barra de vida
+    const w = 26;
+    px(ctx, -w / 2 + 5, -42, w, 2, "#1a1218");
+    px(ctx, -w / 2 + 5, -42, w * Math.max(0, en.vida / en.vidaMax), 2, COLORS.hpFill);
+  });
+}
+
+/** La verdadera amenaza del nivel 2: entra tras la caída del rinoceronte. */
+function drawElefante(ctx, en, phase, flash) {
+  withFacing(ctx, en.x, en.y, en.direccion === 1, () => {
+    const aviso = en.faseCarga === "aviso";
+    const carga = en.faseCarga === "carga";
+    const aturdido = en.faseCarga === "aturdido";
+    const crouch = aviso ? 2 : 0;
+
+    if (carga) {
+      for (let i = 1; i <= 4; i++) {
+        ctx.globalAlpha = 0.24 * (5 - i) / 4;
+        ctx.fillStyle = COLORS.elefHideDark;
+        ctx.beginPath();
+        ctx.ellipse(-12 - i * 8, 1, 9, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    px(ctx, -22, 1.5, 42, 2.5, "rgba(0,0,0,0.5)");
+
+    // patas — gruesas y cortas, zancada pesada
+    const stride = (carga ? Math.sin(en.x * 0.7) : Math.sin(phase)) * (carga ? 4 : 1.8);
+    pxG(ctx, -17 - stride * 0.3, -12 + crouch, 7, 14, COLORS.elefHideDark, "#161618", COLORS.outline);
+    pxG(ctx, 9 + stride * 0.3, -12 + crouch, 7, 14, COLORS.elefHideDark, "#161618", COLORS.outline);
+    pxG(ctx, -13 + stride * 0.3, -13 + crouch, 7, 15, COLORS.elefHideHi, COLORS.elefHide, COLORS.outline);
+    pxG(ctx, 13 - stride * 0.3, -13 + crouch, 7, 15, COLORS.elefHideHi, COLORS.elefHide, COLORS.outline);
+
+    // cuerpo — mole gris, más grande que el rinoceronte
+    pxG(ctx, -21, -34 + crouch, 38, 23, flash || COLORS.elefHideHi, flash || COLORS.elefHideDark, COLORS.outline);
+    // cola
+    ctx.strokeStyle = COLORS.elefHideDark;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-21, -22 + crouch);
+    ctx.quadraticCurveTo(-28, -16 + crouch, -25, -8 + crouch);
+    ctx.stroke();
+
+    // howdah — torreta de guerra atada al lomo, con estandarte
+    pxG(ctx, -10, -46 + crouch, 22, 12, COLORS.elefHowdahHi, COLORS.elefHowdahDark, COLORS.outline);
+    px(ctx, -10, -46 + crouch, 22, 2, COLORS.elefHowdah);
+    for (let i = -8; i <= 8; i += 6) px(ctx, i, -47 + crouch, 2, 4, COLORS.elefHowdahDark);
+    ctx.strokeStyle = COLORS.elefBanner;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-2, -46 + crouch);
+    ctx.lineTo(-2, -56 + crouch + Math.sin(state.tiempoPartida * 4) * 1.5);
+    ctx.stroke();
+    ctx.fillStyle = COLORS.elefBanner;
+    ctx.beginPath();
+    ctx.moveTo(-2, -56 + crouch);
+    ctx.lineTo(6, -53 + crouch);
+    ctx.lineTo(-2, -50 + crouch);
+    ctx.closePath();
+    ctx.fill();
+
+    // cabeza — oreja grande, ojo, testuz blindada
+    const headY = -30 + crouch + (aviso ? 5 : 0);
+    ctx.fillStyle = COLORS.elefHideDark;
+    ctx.beginPath();
+    ctx.ellipse(2, headY - 2, 8, 10, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    pxG(ctx, 10, headY - 10, 15, 14, flash || COLORS.elefHideHi, flash || COLORS.elefHideDark, COLORS.outline);
+    px(ctx, 11, headY - 10, 13, 2, flash || COLORS.rinoArmor);
+
+    const eyeGlow = aviso ? 5 : carga ? 4 : 2.5;
+    glow(ctx, 17, headY - 4, eyeGlow, "rgba(255,140,40,0.7)", 1);
+    px(ctx, 16, headY - 5, 1.8, 1.8, COLORS.rinoEye);
+
+    // colmillos encadenados
+    ctx.strokeStyle = COLORS.elefIvory;
+    ctx.lineWidth = 3.4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(24, headY - 2);
+    ctx.quadraticCurveTo(30 + (carga ? 4 : 0), headY + 3, 32 + (carga ? 4 : 0), headY - 3);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.elefIvoryDark;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(27, headY); ctx.lineTo(29, headY + 2); ctx.stroke();
+
+    // trompa — cuelga y se agita, envuelta en cadena
+    const trunkSway = carga ? 2 : Math.sin(state.tiempoPartida * 2.2) * 2;
+    ctx.strokeStyle = flash || COLORS.elefHide;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(23, headY + 2);
+    ctx.quadraticCurveTo(26 + trunkSway, headY + 12, 22 + trunkSway, headY + 19);
+    ctx.stroke();
+    if (carga) glow(ctx, 22 + trunkSway, headY + 19, 6, "rgba(255,255,255,0.5)", 0.7);
+    ctx.strokeStyle = COLORS.rinoChain;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const cx = 24 + i * (trunkSway * 0.3), cy = headY + 5 + i * 5;
+      ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    if (aviso) glow(ctx, 17, headY - 10, 14, "rgba(255,50,40,0.5)", 0.6 + Math.sin(state.tiempoPartida * 20) * 0.3);
+
+    if (aturdido) {
+      const spin = state.tiempoPartida * 6;
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i * Math.PI * 2) / 3;
+        const sx = 12 + Math.cos(a) * 11, sy = headY - 20 + Math.sin(a) * 3;
+        ctx.fillStyle = "#ffe08a";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // barra de vida — más ancha, acorde a su tamaño
+    const w = 40;
+    px(ctx, -w / 2 + 6, -58 + crouch, w, 2.4, "#1a1218");
+    px(ctx, -w / 2 + 6, -58 + crouch, w * Math.max(0, en.vida / en.vidaMax), 2.4, COLORS.hpFill);
+  });
+}
+
+const DRAWERS = { normal: drawNormal, escudo: drawEscudo, arquero: drawArquero, veloz: drawVeloz, inmortal: drawInmortal, explosivo: drawExplosivo, incendiario: drawIncendiario, rinoceronte: drawRinoceronte, elefante: drawElefante };
 
 export function drawEnemy(ctx, en) {
   const phase = Math.abs(en.vx) > 4 ? en.x * 0.6 : Math.sin(state.tiempoPartida * 3 + en.seed) * 0.5;

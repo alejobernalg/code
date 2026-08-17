@@ -70,6 +70,15 @@ export function drawHUD(ctx) {
     ctx.restore();
   }
 
+  if (state.avisoJefeTimer > 0) {
+    const alpha = Math.min(1, state.avisoJefeTimer / 0.5);
+    ctx.globalAlpha = alpha;
+    panel(ctx, W / 2 - 66, 40, 132, 15, 0.7);
+    glow(ctx, W / 2, 47, 34, "rgba(255,140,50,0.4)", 1);
+    ctx.globalAlpha = 1;
+    shadowText(ctx, state.avisoJefe, W / 2, 43, "#ffb85a", 9, "center");
+  }
+
   if (state.lluvia.fase === "aviso") {
     const pulse = 0.55 + Math.abs(Math.sin(state.tiempoPartida * 10)) * 0.35;
     ctx.globalAlpha = pulse;
