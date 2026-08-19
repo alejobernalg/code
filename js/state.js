@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------
 // Estado central del juego (única fuente de verdad)
 // ---------------------------------------------------------------------
-import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS, LEVELS, setActiveLevel } from "./config.js";
-import { rand as randUtil } from "./utils.js";
+import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS, LEVELS, setActiveLevel, FALANGE_SCORE_TICK, FALANGE_TICK_INTERVAL } from "./config.js";
+import { rand as randUtil, platformUnder } from "./utils.js";
 import { particles, spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
 
@@ -68,6 +68,9 @@ export const state = {
   nivelDesbloqueado: loadUnlockedLevel(),
   enemigosDerrotados: 0,
   objetivoEnemigos: LEVELS[0].objective,
+  tipoObjetivo: LEVELS[0].tipoObjetivo || "derrotas",
+  enFalange: false,
+  falangeTimer: 0,
   puntos: 0,
   mejorPuntaje: loadBestScore(),
   vidas: PLAYER_LIVES,
@@ -100,7 +103,9 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.fase = "playing";
   state.nivel = clampNivel(nivel);
   state.nivelSeleccionado = state.nivel;
-  state.objetivoEnemigos = (LEVELS[state.nivel - 1] || LEVELS[0]).objective;
+  const def = LEVELS[state.nivel - 1] || LEVELS[0];
+  state.objetivoEnemigos = def.objective;
+  state.tipoObjetivo = def.tipoObjetivo || "derrotas";
   state.enemigosDerrotados = 0;
   setActiveLevel(state.nivel);
   state.puntos = 0;
@@ -109,18 +114,25 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.comboTimer = 0;
   state.tiempoPartida = 0;
   state.screenShake = 0;
+  state.enFalange = false;
+  state.falangeTimer = 0;
   state.jugador = freshPlayer();
   state.enemigos = [];
   state.proyectiles = [];
   state.flechasLluvia = [];
   state.lluvia = { fase: "normal", timer: randUtil(RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL), danoRecibido: false, bonusTimer: 0 };
   state.spawnTimer = 1.2;
-  state.proximoInmortal = 42;
+  // En el nivel 4 (45 s en total) el Inmortal debe aparecer bien antes del
+  // amanecer para que haya tiempo real de enfrentarlo; el valor por defecto
+  // (42 s) lo dejaría entrar casi al terminar el nivel.
+  state.proximoInmortal = state.tipoObjetivo === "sobrevivir" ? 28 : 42;
   state.rinoTimer = 1.4;
   state.jefeGenerado = false;
   state.avisoJefe = null;
   state.avisoJefeTimer = 0;
   particles.length = 0;
+
+  if (state.tipoObjetivo === "sobrevivir") announceBoss("¡RESISTE HASTA EL AMANECER!", 3);
 }
 
 export function announceBoss(nombre, duration = 2.4) {
@@ -129,18 +141,29 @@ export function announceBoss(nombre, duration = 2.4) {
 }
 
 export function registerEnemyDefeat() {
+  // El nivel 4 no cuenta bajas — su objetivo es de tiempo (ver updateMeta),
+  // y ambos modos comparten el campo `enemigosDerrotados` para reutilizar
+  // la misma barra de progreso del HUD. Sin esta guarda, cada enemigo
+  // derrotado empujaría ese contador y podría disparar completeLevel()
+  // antes de que se cumpla el tiempo real de supervivencia.
+  if (state.tipoObjetivo === "sobrevivir") return;
   state.enemigosDerrotados++;
   if (state.enemigosDerrotados >= state.objetivoEnemigos) completeLevel();
 }
 
 export function completeLevel() {
   if (state.fase !== "playing") return;
-  state.fase = "levelComplete";
   const next = Math.min(LEVEL_COUNT, state.nivel + 1);
   if (next > state.nivelDesbloqueado) {
     state.nivelDesbloqueado = next;
     persistUnlockedLevel(next);
   }
+  const esFinal = state.nivel >= LEVEL_COUNT;
+  if (esFinal && state.puntos > state.mejorPuntaje) {
+    state.mejorPuntaje = state.puntos;
+    persistBestScore(state.mejorPuntaje);
+  }
+  state.fase = esFinal ? "campaignComplete" : "levelComplete";
 }
 
 export function awardScore(basePoints) {
@@ -200,6 +223,27 @@ export function damagePlayer(amount = 1, knockbackDir = 0, { blockable = true } 
 
 export function updateMeta(dt) {
   state.tiempoPartida += dt;
+
+  if (state.fase === "playing" && state.tipoObjetivo === "sobrevivir") {
+    // Falange: quieto y cubierto sobre el promontorio marcado, el jugador
+    // suma resistencia poco a poco — recompensa sostener la línea, no solo
+    // cazar enemigos como en el resto de niveles.
+    const plat = platformUnder(state.jugador.x, state.jugador.y);
+    state.enFalange = !!(plat && plat.falange && state.jugador.cubriendose);
+    if (state.enFalange) {
+      state.falangeTimer += dt;
+      while (state.falangeTimer >= FALANGE_TICK_INTERVAL) {
+        state.falangeTimer -= FALANGE_TICK_INTERVAL;
+        state.puntos += FALANGE_SCORE_TICK;
+      }
+    } else {
+      state.falangeTimer = 0;
+    }
+
+    state.enemigosDerrotados = Math.min(state.objetivoEnemigos, state.tiempoPartida);
+    if (state.tiempoPartida >= state.objetivoEnemigos) completeLevel();
+  }
+
   if (state.comboTimer > 0) {
     state.comboTimer -= dt;
     if (state.comboTimer <= 0) state.comboActual = 0;

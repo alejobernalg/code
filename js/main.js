@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Punto de entrada: arma el canvas, conecta módulos y corre el bucle
 // ---------------------------------------------------------------------
-import { W, H, LEVEL_COUNT } from "./config.js";
+import { W, H } from "./config.js";
 import { state, resetState, updateMeta, moveLevelSelection } from "./state.js";
 import { input, initInput, initTouchControls, clearEdges } from "./input.js";
 import { updatePlayer, drawPlayer } from "./player.js";
@@ -10,7 +10,7 @@ import { updateProjectiles, drawProjectiles } from "./projectiles.js";
 import { updateArrowRain, drawArrowRainOverlay, drawFallingArrows } from "./arrowRain.js";
 import { drawBackground, drawVignette } from "./background.js";
 import { updateParticles, drawParticles } from "./particles.js";
-import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen, drawLevelCompleteScreen } from "./hud.js";
+import { drawHUD, drawStartScreen, drawLevelSelectScreen, drawGameOverScreen, drawLevelCompleteScreen, drawCampaignCompleteScreen } from "./hud.js";
 import { toggleMute, sfx, setOnUnlock, unlockAudio } from "./audio.js";
 
 const canvas = document.getElementById("screen");
@@ -63,9 +63,15 @@ function update(dt) {
   } else if (state.fase === "gameover") {
     if (input.confirmPressed) state.fase = "levelSelect";
   } else if (state.fase === "levelComplete") {
+    // Solo se llega aquí cuando queda nivel siguiente: el final de la
+    // campaña usa su propia fase ("campaignComplete"), ver completeLevel().
     if (input.confirmPressed) {
-      if (state.nivel < LEVEL_COUNT) resetState(state.nivel + 1);
-      else state.fase = "levelSelect";
+      resetState(state.nivel + 1);
+      sfx.start();
+    }
+  } else if (state.fase === "campaignComplete") {
+    if (input.confirmPressed) {
+      resetState(1);
       sfx.start();
     }
   }
@@ -91,7 +97,7 @@ function render(dt) {
 
   drawBackground(ctx, animTime, dt);
 
-  if (state.fase === "playing" || state.fase === "gameover" || state.fase === "levelComplete") {
+  if (state.fase === "playing" || state.fase === "gameover" || state.fase === "levelComplete" || state.fase === "campaignComplete") {
     const drawables = [{ y: state.jugador.y, draw: () => drawPlayer(ctx) }];
     for (const en of state.enemigos) drawables.push({ y: en.y, draw: () => drawEnemy(ctx, en) });
     drawables.sort((a, b) => a.y - b.y);
@@ -111,6 +117,7 @@ function render(dt) {
   else if (state.fase === "levelSelect") drawLevelSelectScreen(ctx, animTime);
   else if (state.fase === "gameover") drawGameOverScreen(ctx);
   else if (state.fase === "levelComplete") drawLevelCompleteScreen(ctx);
+  else if (state.fase === "campaignComplete") drawCampaignCompleteScreen(ctx, animTime);
 }
 
 let last = 0;

@@ -21,6 +21,16 @@ function poolForTime(t) {
     if (t > 22) pool.push("explosivo", "incendiario");
     return pool;
   }
+  // Nivel 4: última noche — el imperio entero se lanza contra la línea en
+  // apenas 45 s, así que la escalada se comprime en vez de estirarse como
+  // en los niveles de horda largos.
+  if (state.nivel === 4) {
+    const pool = ["normal", "arquero"];
+    if (t > 8) pool.push("escudo", "veloz");
+    if (t > 20) pool.push("explosivo");
+    if (t > 30) pool.push("incendiario", "normal");
+    return pool;
+  }
   const pool = ["normal"];
   if (t > 12) pool.push("normal", "arquero");
   if (t > 20) pool.push("escudo");

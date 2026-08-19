@@ -2,7 +2,7 @@
 // Escenario: cielo de atardecer, montañas, mar, acantilados y plataformas
 // ---------------------------------------------------------------------
 import { W, H, activePlatforms, COLORS } from "./config.js";
-import { px, glow } from "./utils.js";
+import { px, glow, lerp, rand, clamp } from "./utils.js";
 import { state } from "./state.js";
 
 const clouds = [
@@ -357,7 +357,131 @@ function drawCanyon(ctx, time, dt) {
   drawCanyonFloor(ctx, 176);
 }
 
+/**
+ * Nivel 4 — última noche en las Puertas Calientes: el objetivo es de tiempo,
+ * no de bajas (ver `tipoObjetivo` en state.js), así que el cielo tormentoso
+ * se va aclarando hacia el dorado del amanecer en proporción directa al
+ * progreso (`dawnPct`) — el fondo mismo cuenta cuánto falta para ganar.
+ */
+const lightning = { timer: rand(1.5, 3.5), flash: 0 };
+
+function drawLastStandSky(ctx, horizon, dawnPct) {
+  const topNight = [8, 8, 20], topDawn = [58, 24, 46];
+  const lowNight = [24, 20, 44], lowDawn = [255, 150, 78];
+  const top = topNight.map((c, i) => Math.round(lerp(c, topDawn[i], dawnPct)));
+  const low = lowNight.map((c, i) => Math.round(lerp(c, lowDawn[i], dawnPct)));
+  const grad = ctx.createLinearGradient(0, 0, 0, horizon);
+  grad.addColorStop(0, `rgb(${top.join(",")})`);
+  grad.addColorStop(1, `rgb(${low.join(",")})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, horizon);
+  if (dawnPct > 0.05) glow(ctx, W / 2, horizon, 50 + dawnPct * 55, `rgba(255,180,90,${0.15 + dawnPct * 0.4})`, 1);
+}
+
+function drawStormRidge(ctx, baseY, dawnPct) {
+  const top = [Math.round(lerp(20, 90, dawnPct)), Math.round(lerp(14, 50, dawnPct)), Math.round(lerp(28, 40, dawnPct))];
+  const g = ctx.createLinearGradient(0, baseY - 40, 0, baseY + 10);
+  g.addColorStop(0, `rgb(${top.join(",")})`);
+  g.addColorStop(1, "#050308");
+  ctx.fillStyle = g;
+  const ridge = [[0, -4], [36, -34], [70, -10], [108, -40], [150, -14], [190, -36], [230, -10], [268, -30], [W, -6]];
+  ctx.beginPath();
+  ctx.moveTo(0, baseY + 10);
+  for (const [x, dy] of ridge) ctx.lineTo(x, baseY + dy);
+  ctx.lineTo(W, baseY + 10);
+  ctx.closePath();
+  ctx.fill();
+  if (dawnPct > 0.15) {
+    ctx.strokeStyle = `rgba(255,190,110,${(dawnPct - 0.15) * 0.6})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, baseY + ridge[0][1]);
+    for (const [x, dy] of ridge) ctx.lineTo(x, baseY + dy);
+    ctx.stroke();
+  }
+}
+
+function drawRain(ctx) {
+  ctx.strokeStyle = "rgba(180,200,230,0.22)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 26; i++) {
+    const x = (i * 53 + state.tiempoPartida * 60) % (W + 40) - 20;
+    const y = (i * 37 + state.tiempoPartida * 130) % H;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 5, y + 11);
+    ctx.stroke();
+  }
+}
+
+/** La tormenta amaina según se acerca el amanecer: los relámpagos se espacian más. */
+function drawLightning(ctx, dt, dawnPct) {
+  lightning.timer -= dt;
+  if (lightning.timer <= 0) {
+    lightning.flash = Math.random() < 0.55 ? 0.32 : 0;
+    lightning.timer = rand(1.8, 4 + dawnPct * 6);
+  }
+  if (lightning.flash > 0) {
+    ctx.fillStyle = `rgba(220,230,255,${lightning.flash})`;
+    ctx.fillRect(0, 0, W, H);
+    lightning.flash = Math.max(0, lightning.flash - dt * 2.2);
+  }
+}
+
+function drawStormFloor(ctx, y, dawnPct) {
+  const top = [Math.round(lerp(20, 70, dawnPct)), Math.round(lerp(16, 36, dawnPct)), Math.round(lerp(22, 28, dawnPct))];
+  const g = ctx.createLinearGradient(0, y, 0, H);
+  g.addColorStop(0, `rgb(${top.join(",")})`);
+  g.addColorStop(1, "#050304");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y, W, H - y);
+}
+
+function drawLastStand(ctx, time, dt, dawnPct) {
+  const horizon = 168;
+  drawLastStandSky(ctx, horizon, dawnPct);
+  drawStormRidge(ctx, 150, dawnPct);
+  drawRain(ctx);
+  drawLightning(ctx, dt, dawnPct);
+  drawStormFloor(ctx, horizon, dawnPct);
+}
+
+function drawStormLedge(ctx, plat, dawnPct) {
+  const g = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.h);
+  g.addColorStop(0, "#5a6478");
+  g.addColorStop(0.35, "#333c4c");
+  g.addColorStop(1, "#14161e");
+  ctx.fillStyle = g;
+  ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  px(ctx, plat.x, plat.y, plat.w, 1, "rgba(200,210,230,0.55)");
+  ctx.fillStyle = "rgba(10,10,16,0.4)";
+  for (let x = plat.x + 6; x < plat.x + plat.w; x += 10) px(ctx, x, plat.y + 1, 3, 2 + ((x * 3) % 3), "rgba(10,10,16,0.4)");
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(plat.x, plat.y + plat.h, plat.w, 4);
+
+  // La posición de falange: un estandarte espartano clavado marca el punto
+  // que conviene sostener (ver mecánica de `falange` en state.js).
+  if (plat.falange) {
+    const cx = plat.x + plat.w / 2;
+    glow(ctx, cx, plat.y - 14, 22, `rgba(255,120,80,${0.25 + dawnPct * 0.25})`, 1);
+    px(ctx, cx - 1, plat.y - 24, 2, 24, "#8a5a20");
+    ctx.fillStyle = COLORS.spartanRed;
+    ctx.beginPath();
+    ctx.moveTo(cx, plat.y - 24);
+    ctx.lineTo(cx + 12, plat.y - 19);
+    ctx.lineTo(cx, plat.y - 14);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 export function drawBackground(ctx, time, dt = 0) {
+  if (state.nivel === 4) {
+    const dawnPct = clamp(state.tiempoPartida / (state.objetivoEnemigos || 1), 0, 1);
+    drawLastStand(ctx, time, dt, dawnPct);
+    for (const plat of activePlatforms) drawStormLedge(ctx, plat, dawnPct);
+    return;
+  }
   if (state.nivel === 3) {
     drawCave(ctx, time);
     for (const plat of activePlatforms) drawCavePlatform(ctx, plat);

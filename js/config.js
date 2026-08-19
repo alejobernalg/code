@@ -46,6 +46,20 @@ const CANYON_PLATFORMS = [
   { x: 246, y: 158, w: 56, h: 8, tier: 1 }
 ];
 
+// Nivel 4 — última noche en las Puertas Calientes: un promontorio central
+// (la posición de falange, ver `falange: true`) flanqueado por dos cornisas
+// bajas de retirada. No hay torre que escalar como en el nivel 1: es un
+// punto fijo que conviene sostener, no recorrer.
+export const LAST_STAND_SURVIVAL_TIME = 45; // segundos que hay que resistir hasta el amanecer
+export const FALANGE_SCORE_TICK = 15;       // puntos por segundo sosteniendo la posición de falange
+export const FALANGE_TICK_INTERVAL = 1.0;
+const LAST_STAND_PLATFORMS = [
+  { x: 0, y: 200, w: 320, h: 24, tier: 0 },
+  { x: 24, y: 158, w: 54, h: 8, tier: 1 },
+  { x: 242, y: 158, w: 54, h: 8, tier: 1 },
+  { x: 134, y: 112, w: 52, h: 8, tier: 2, falange: true }
+];
+
 export const LEVELS = Array.from({ length: LEVEL_COUNT }, (_, i) => ({
   objective: 8 + i * 3,
   platforms: PLATFORMS,
@@ -54,6 +68,14 @@ export const LEVELS = Array.from({ length: LEVEL_COUNT }, (_, i) => ({
 LEVELS[2] = { objective: 20, platforms: CAVE_PLATFORMS, theme: "cueva" };
 // Dos derrotas: el rinoceronte cae rápido y dispara al elefante de guerra.
 LEVELS[1] = { objective: 2, platforms: CANYON_PLATFORMS, theme: "corredor" };
+// Nivel 4 — objetivo distinto a los demás: no se cuentan bajas, se resiste
+// un tiempo fijo bajo oleadas combinadas hasta que rompe el amanecer.
+LEVELS[3] = {
+  objective: LAST_STAND_SURVIVAL_TIME,
+  platforms: LAST_STAND_PLATFORMS,
+  theme: "amanecer",
+  tipoObjetivo: "sobrevivir"
+};
 
 export let activePlatforms = PLATFORMS;
 export function setActiveLevel(level) {

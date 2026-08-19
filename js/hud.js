@@ -18,6 +18,59 @@ function panel(ctx, x, y, w, h, alpha = 0.55) {
   roundRect(ctx, x, y, w, h, 4, g, "rgba(255,180,110,0.25)");
 }
 
+/** Barra de progreso genérica (fondo + relleno con degradado) — usada tanto
+ * para el objetivo dentro del nivel como para el avance de la campaña. */
+function drawProgressBar(ctx, x, y, w, h, pct, colorFrom, colorTo) {
+  roundRect(ctx, x, y, w, h, h / 2, "rgba(0,0,0,0.45)", "rgba(255,200,140,0.3)");
+  const fillW = Math.max(pct > 0 ? h : 0, w * clampPct(pct));
+  if (fillW > 0) {
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, colorFrom);
+    g.addColorStop(1, colorTo);
+    roundRect(ctx, x, y, fillW, h, h / 2, g);
+  }
+}
+
+function clampPct(v) {
+  return Math.min(1, Math.max(0, v));
+}
+
+/**
+ * Indicador de campaña: un nodo por nivel (1..LEVEL_COUNT) unidos por una
+ * línea que se va rellenando. `completed` = cuántos niveles quedaron atrás
+ * (el nivel `i+1` se pinta como superado si `i < completed`). Se usa tanto
+ * en la transición "nivel superado" como en la pantalla de selección, así
+ * el avance 1→2→3 siempre es visible, no solo el objetivo del nivel actual.
+ */
+function drawCampaignProgress(ctx, x, y, w, completed, total) {
+  const nodeR = 4;
+  const step = total > 1 ? w / (total - 1) : 0;
+  const pct = total > 1 ? clampPct(completed / (total - 1)) : 1;
+
+  ctx.strokeStyle = "rgba(255,200,140,0.25)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke();
+
+  if (pct > 0) {
+    ctx.strokeStyle = "#8ce8d6";
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w * pct, y); ctx.stroke();
+  }
+
+  for (let i = 0; i < total; i++) {
+    const nx = x + step * i;
+    const done = i < completed;
+    const isNext = i === completed && completed < total;
+    ctx.beginPath();
+    ctx.arc(nx, y, nodeR, 0, Math.PI * 2);
+    ctx.fillStyle = done ? "#8ce8d6" : isNext ? "#ffd25a" : "rgba(255,255,255,0.18)";
+    ctx.fill();
+    ctx.strokeStyle = COLORS.outline;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    pixelText(ctx, String(i + 1), nx, y - 3, done || isNext ? COLORS.outline : "#c9b98a", 6, "center");
+  }
+}
+
 function drawHelmetIcon(ctx, x, y) {
   const g = ctx.createLinearGradient(0, y, 0, y + 6);
   g.addColorStop(0, COLORS.bronzeHi);
@@ -41,10 +94,24 @@ export function drawHUD(ctx) {
   shadowText(ctx, `PUNTOS ${state.puntos}`, 6, 4, "#ffe9c4", 7, "left");
   shadowText(ctx, `MEJOR ${state.mejorPuntaje}`, 6, 13, "#c9b98a", 6, "left");
 
-  const levelW = 34;
-  panel(ctx, W / 2 - levelW / 2, 2, levelW, 10, 0.5);
-  shadowText(ctx, `NIVEL ${state.nivel}`, W / 2, 4, "#f0e0c4", 6, "center");
-  shadowText(ctx, `${state.enemigosDerrotados}/${state.objetivoEnemigos}`, W / 2, 13, "#8ce8d6", 6, "center");
+  const isSurvive = state.tipoObjetivo === "sobrevivir";
+  const levelW = isSurvive ? 64 : 54, levelX = W / 2 - levelW / 2;
+  const levelLabel = isSurvive
+    ? `RESISTE ${Math.ceil(Math.max(0, state.objetivoEnemigos - state.enemigosDerrotados))}s`
+    : `NIVEL ${state.nivel} · ${state.enemigosDerrotados}/${state.objetivoEnemigos}`;
+  panel(ctx, levelX, 2, levelW, 18, 0.5);
+  shadowText(ctx, levelLabel, W / 2, 4, "#f0e0c4", 6, "center");
+  drawProgressBar(ctx, levelX + 4, 14, levelW - 8, 4,
+    state.objetivoEnemigos > 0 ? state.enemigosDerrotados / state.objetivoEnemigos : 0,
+    isSurvive ? "#ffb85a" : "#4fd8b8",
+    isSurvive ? "#ffe9c4" : "#8ce8d6");
+
+  if (state.enFalange) {
+    const pulse = 0.7 + Math.abs(Math.sin(state.tiempoPartida * 8)) * 0.3;
+    ctx.globalAlpha = pulse;
+    shadowText(ctx, "🛡 MURO DE ESCUDOS", W / 2, 58, "#ffd25a", 7, "center");
+    ctx.globalAlpha = 1;
+  }
 
   const livesW = state.vidas > 0 ? state.vidas * 12 + 8 : 0;
   if (livesW > 0) panel(ctx, W - livesW - 4, 2, livesW, 12);
@@ -208,7 +275,10 @@ export function drawLevelSelectScreen(ctx, time) {
     shadowText(ctx, unlocked ? String(level) : "🔒", x + tileW / 2, y + tileH / 2 - 6, selected ? COLORS.outline : "#e8d9c4", unlocked ? 10 : 8, "center");
   }
 
-  const hintY = startY + gridH + 14;
+  const barY = startY + gridH + 16;
+  drawCampaignProgress(ctx, W / 2 - 40, barY, 80, state.nivelDesbloqueado - 1, LEVEL_COUNT);
+
+  const hintY = barY + 16;
   if (Math.floor(time * 2) % 2 === 0) {
     shadowText(ctx, "←→ ELEGIR NIVEL", W / 2, hintY, "#ffe9c4", 7, "center");
   }
@@ -216,14 +286,47 @@ export function drawLevelSelectScreen(ctx, time) {
 }
 
 export function drawLevelCompleteScreen(ctx) {
-  const final = state.nivel >= LEVEL_COUNT;
   ctx.fillStyle = "rgba(3, 14, 18, 0.66)";
   ctx.fillRect(0, 0, W, H);
-  glow(ctx, W / 2, H / 2 - 24, 80, "rgba(71, 224, 187, 0.32)", 1);
-  panel(ctx, W / 2 - 86, H / 2 - 30, 172, 64, 0.7);
-  shadowText(ctx, final ? "¡CAMPAÑA COMPLETADA!" : `NIVEL ${state.nivel} SUPERADO`, W / 2, H / 2 - 22, "#8cf0d8", 11, "center");
-  shadowText(ctx, final ? "Has mantenido el paso" : `NIVEL ${state.nivel + 1} DESBLOQUEADO`, W / 2, H / 2 - 4, "#ffe0a0", 8, "center");
-  shadowText(ctx, final ? "ENTER PARA ELEGIR NIVEL" : "ENTER PARA CONTINUAR", W / 2, H / 2 + 18, "#f0e6d2", 7, "center");
+  glow(ctx, W / 2, H / 2 - 20, 80, "rgba(71, 224, 187, 0.32)", 1);
+  panel(ctx, W / 2 - 86, H / 2 - 36, 172, 78, 0.7);
+  shadowText(ctx, `NIVEL ${state.nivel} SUPERADO`, W / 2, H / 2 - 28, "#8cf0d8", 11, "center");
+  shadowText(ctx, `NIVEL ${state.nivel + 1} DESBLOQUEADO`, W / 2, H / 2 - 10, "#ffe0a0", 8, "center");
+  drawCampaignProgress(ctx, W / 2 - 40, H / 2 + 12, 80, state.nivel, LEVEL_COUNT);
+  shadowText(ctx, "ENTER PARA CONTINUAR", W / 2, H / 2 + 28, "#f0e6d2", 7, "center");
+}
+
+/**
+ * Pantalla final tras el nivel 4: distinta a "nivel superado" a propósito
+ * — es el cierre de la campaña, con su propio mensaje (con guiño a 300) y
+ * una única salida: reiniciar la campaña completa desde el nivel 1. No
+ * lleva de vuelta al menú de selección para que el logro se sienta como un
+ * final real, no como una parada intermedia más.
+ */
+export function drawCampaignCompleteScreen(ctx, time) {
+  ctx.fillStyle = "rgba(6, 4, 2, 0.7)";
+  ctx.fillRect(0, 0, W, H);
+  const pulse = 0.75 + Math.abs(Math.sin(time * 2)) * 0.25;
+  ctx.globalAlpha = pulse;
+  glow(ctx, W / 2, H / 2 - 30, 100, "rgba(255,190,100,0.4)", 1);
+  ctx.globalAlpha = 1;
+
+  panel(ctx, W / 2 - 106, H / 2 - 50, 212, 124, 0.75);
+  shadowText(ctx, "¡LAS PUERTAS CALIENTES RESISTEN!", W / 2, H / 2 - 44, "#ffd98a", 10, "center");
+  shadowText(ctx, "Que el mundo sepa:", W / 2, H / 2 - 27, "#f0e6d2", 7, "center");
+  shadowText(ctx, "hombres libres se alzaron ante un imperio", W / 2, H / 2 - 17, "#f0e6d2", 7, "center");
+  shadowText(ctx, "y no retrocedieron. Ni un paso.", W / 2, H / 2 - 7, "#f0e6d2", 7, "center");
+
+  shadowText(ctx, `Puntaje final: ${state.puntos}`, W / 2, H / 2 + 6, "#ffe0a0", 7, "center");
+  shadowText(ctx, `Mejor puntaje: ${state.mejorPuntaje}`, W / 2, H / 2 + 16, "#c9b98a", 6, "center");
+
+  drawCampaignProgress(ctx, W / 2 - 40, H / 2 + 32, 80, LEVEL_COUNT, LEVEL_COUNT);
+
+  const dots = ".".repeat(1 + Math.floor(time * 2) % 3);
+  shadowText(ctx, `CARGANDO NUEVA CAMPAÑA${dots}`, W / 2, H / 2 + 46, "#a898b0", 6, "center");
+  if (Math.floor(time * 2) % 2 === 0) {
+    shadowText(ctx, "ENTER PARA REVIVIR LA LEYENDA DESDE EL NIVEL 1", W / 2, H / 2 + 58, "#ffe9c4", 7, "center");
+  }
 }
 
 export function drawGameOverScreen(ctx) {
