@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Estado central del juego (única fuente de verdad)
 // ---------------------------------------------------------------------
-import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, COLORS, LEVELS, setActiveLevel, FALANGE_SCORE_TICK, FALANGE_TICK_INTERVAL } from "./config.js";
+import { W, GROUND_Y, PLAYER_HW, PLAYER_H, PLAYER_LIVES, JAVELIN_MAX, COMBO_WINDOW, RAIN_MIN_INTERVAL, RAIN_MAX_INTERVAL, PLAYER_INVULN_TIME, LEVEL_COUNT, LEVEL_TRANSITION_TIME, COLORS, LEVELS, setActiveLevel, FALANGE_SCORE_TICK, FALANGE_TICK_INTERVAL } from "./config.js";
 import { rand as randUtil, platformUnder } from "./utils.js";
 import { particles, spawnParticles } from "./particles.js";
 import { sfx } from "./audio.js";
@@ -78,6 +78,7 @@ export const state = {
   comboTimer: 0,
   tiempoPartida: 0,
   screenShake: 0,
+  transicionTimer: 0, // fundido a negro al entrar a un nivel (ver resetState)
 
   jugador: freshPlayer(),
   enemigos: [],
@@ -116,6 +117,7 @@ export function resetState(nivel = state.nivelSeleccionado) {
   state.screenShake = 0;
   state.enFalange = false;
   state.falangeTimer = 0;
+  state.transicionTimer = LEVEL_TRANSITION_TIME;
   state.jugador = freshPlayer();
   state.enemigos = [];
   state.proyectiles = [];

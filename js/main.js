@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // Punto de entrada: arma el canvas, conecta módulos y corre el bucle
 // ---------------------------------------------------------------------
-import { W, H } from "./config.js";
+import { W, H, LEVEL_TRANSITION_TIME } from "./config.js";
 import { state, resetState, updateMeta, moveLevelSelection } from "./state.js";
 import { input, initInput, initTouchControls, clearEdges } from "./input.js";
 import { updatePlayer, drawPlayer } from "./player.js";
@@ -84,6 +84,8 @@ function update(dt) {
   updateArrowRain(dt);
   updateParticles(dt);
 
+  if (state.transicionTimer > 0) state.transicionTimer = Math.max(0, state.transicionTimer - dt);
+
   clearEdges();
 }
 
@@ -118,6 +120,17 @@ function render(dt) {
   else if (state.fase === "gameover") drawGameOverScreen(ctx);
   else if (state.fase === "levelComplete") drawLevelCompleteScreen(ctx);
   else if (state.fase === "campaignComplete") drawCampaignCompleteScreen(ctx, animTime);
+
+  // Fundido de entrada: se dispara cada vez que resetState() arranca un
+  // nivel (desde el menú o al continuar tras completar el anterior), para
+  // que el cambio no se sienta como un corte seco de pantalla.
+  if (state.transicionTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = state.transicionTimer / LEVEL_TRANSITION_TIME;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 }
 
 let last = 0;

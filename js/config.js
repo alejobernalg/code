@@ -7,6 +7,8 @@ export const H = 224;
 
 // -- niveles --
 export const LEVEL_COUNT = 4;
+// Fundido a negro con el que entra cada nivel (arranca al llamar resetState).
+export const LEVEL_TRANSITION_TIME = 0.5;
 
 // -- física --
 export const GRAVITY = 780;
