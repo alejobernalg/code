@@ -240,7 +240,7 @@ export function drawLevelSelectScreen(ctx, time) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  shadowText(ctx, "ELIGE TU NIVEL", W / 2, 20, "#ff7a4a", 12, "center");
+  shadowText(ctx, "DESBLOQUEA TU CAMINO", W / 2, 20, "#ff7a4a", 12, "center");
 
   const cols = LEVEL_COUNT, rows = 1;
   const tileW = 56, tileH = 46, gapX = 12, gapY = 10;
